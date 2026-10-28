@@ -31,7 +31,7 @@ El flujo completo está en el [Plan de Gestión de Configuración](docs/gestion/
 
 1. Crea una rama desde `develop`: `feature/HU-<número>-<nombre-corto>` (por ejemplo `feature/HU-07-lectura-bascula`).
 2. Escribe commits con el formato `<tipo>(<módulo>): <qué cambia> [HU-xx]`, por ejemplo `feat(pos): calcula importe por peso [HU-07]`.
-3. Abre un Pull Request hacia `develop` con la plantilla; necesita 1 aprobación de otra persona del equipo.
+3. Abre un Pull Request hacia `develop` con la plantilla y revísalo con su lista de verificación antes de integrarlo (autorrevisión).
 4. Los cambios a algo que ya está en línea base se piden con un issue de **Solicitud de cambio**.
 
 Nunca subas contraseñas, certificados, CSD, archivos `.env` ni respaldos de la base de datos.

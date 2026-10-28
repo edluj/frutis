@@ -24,6 +24,8 @@ Este plan define cómo se identifican, versionan, cambian y auditan los producto
 | Desarrolladores | Desarrolladores Desktop 1 y 2, Diseñador UX/UI | Trabajar en ramas, abrir Pull Requests y revisar el código de otros |
 | Auditor de configuración | Especialista de QA | Verificar que cada línea base esté completa y sea consistente |
 
+**Equipo de una persona.** Edson ejecuta todos los roles del proyecto. Las responsabilidades se mantienen separadas por rol y cada revisión se hace con la lista de verificación del rol que corresponde, en un momento distinto al de la escritura. El comité de control de cambios queda formado por Edson y el responsable del cliente.
+
 ## 2. Elementos de configuración
 
 Todo elemento de configuración (EC) tiene un identificador, vive en un solo lugar y entra a una línea base; lo que no está en esta tabla no se controla.
@@ -82,7 +84,7 @@ Se usa un flujo Git Flow simplificado: `main` siempre contiene lo que corre en l
 
 ```mermaid
 flowchart LR
-    F["feature/HU-xx<br/>una por historia"] -- "PR + 1 aprobación" --> D["develop<br/>integración · v0.x"]
+    F["feature/HU-xx<br/>una por historia"] -- "PR + autorrevisión" --> D["develop<br/>integración · v0.x"]
     D -- "fin del Sprint 5" --> R["release/v1.0.0<br/>candidata · rc"]
     R -- "PR + visto bueno QA" --> M["main<br/>producción · v1.0.x"]
     M -- "falla en producción" --> H["hotfix/v1.0.x<br/>corrección urgente"]
@@ -121,11 +123,11 @@ Tipos: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`. Módulos: `pos`, `com
 **Pull Requests.**
 
 - Todo cambio a `develop` o `main` entra por Pull Request; nadie hace push directo.
-- Al menos 1 aprobación de otra persona del equipo; los cambios a `database/` o `middleware/app/security/` los aprueba el Arquitecto.
+- Autorrevisión: el autor revisa su propio Pull Request con la lista de verificación de la plantilla, al menos unas horas después de escribirlo. Los cambios a `database/` o `middleware/app/security/` se revisan además con la lista del rol Arquitecto.
 - La plantilla pide: historia (HU-xx), qué cambia, cómo se probó y capturas si cambia una pantalla.
 - Se integra con *squash merge* para dejar un commit por historia y se borra la rama.
 
-**Reglas de protección en GitHub.** `main` y `develop` exigen Pull Request, 1 aprobación y conversaciones resueltas, y bloquean el *force push* y el borrado.
+**Reglas de protección en GitHub.** `main` y `develop` exigen Pull Request y conversaciones resueltas, sin aprobaciones obligatorias porque GitHub no permite aprobar un Pull Request propio, y bloquean el *force push* y el borrado.
 
 ## 6. Versionado y líneas base
 
@@ -212,7 +214,7 @@ QA audita cada línea base antes de etiquetarla, y el estado de la configuració
 
 | Métrica | Meta |
 | --- | --- |
-| Pull Requests integrados sin revisión | 0 |
+| Pull Requests integrados sin la lista de verificación completa | 0 |
 | Commits sin identificador HU-xx o issue | 0 % |
 | Solicitudes de cambio abiertas por más de 5 días hábiles | 0 |
 | Hallazgos de auditoría abiertos al crear una línea base | 0 |
@@ -220,9 +222,9 @@ QA audita cada línea base antes de etiquetarla, y el estado de la configuració
 **Pendientes para aplicar este plan.**
 
 - [x] Vincular la cuenta de GitHub con acceso a `edluj/frutis`.
-- [x] Crear la estructura de carpetas, mover el prototipo a `legacy/` y ampliar el `.gitignore`.
-- [x] Agregar la plantilla de Pull Request y la de solicitud de cambio.
-- [ ] Renombrar `master` a `main`, crear `develop` y activar las reglas de protección.
+- [x] Crear la estructura de carpetas, mover el prototipo a `legacy/` y ampliar el `.gitignore` (Pull Request #1).
+- [x] Agregar la plantilla de Pull Request y la de solicitud de cambio (Pull Request #1).
 - [x] Registrar SC-01 a SC-03 como issues (#2, #3 y #4).
-- [ ] Invitar como colaboradores a los 6 integrantes del equipo.
+- [ ] Integrar el Pull Request #1 y renombrar `master` a `main`.
+- [ ] Crear `develop` y activar las reglas de protección.
 - [ ] Subir a `docs/` los documentos EC-01 a EC-05.
