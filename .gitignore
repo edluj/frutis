@@ -1,11 +1,34 @@
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
 
-# Runtime data
-logs/*.txt
+# Empaquetado (PyInstaller)
+dist/
+build/
+*.spec.bak
+
+# Datos de ejecución
+logs/
 datos/*.txt
+*.log
 
-# Sensitive local assets
-server.key
-server.crt
+# Secretos y datos sensibles: nunca entran al repositorio (Plan de CM, sección 2)
+.env
+*.key
+*.crt
+*.cer
+*.pem
 usuarios.txt
+
+# Respaldos de base de datos
+*.sql.gz
+*.dump
+respaldos/
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
