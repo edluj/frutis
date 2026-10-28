@@ -168,9 +168,9 @@ Un elemento que ya está en línea base solo cambia con una solicitud aprobada; 
 
 | ID | Cambio | Origen | Clase propuesta |
 | --- | --- | --- | --- |
-| SC-01 | Seis tablas de soporte fuera de las 14 cotizadas | Documento de Arquitectura | Mayor |
-| SC-02 | Rol que autoriza devoluciones (no existe Supervisor) | Refinement de requisitos | Menor |
-| SC-03 | Cuentas por cobrar sin tabla ni venta a crédito | APR, punto 3 | Mayor |
+| [SC-01](https://github.com/edluj/frutis/issues/2) | Seis tablas de soporte fuera de las 14 cotizadas | Documento de Arquitectura | Mayor |
+| [SC-02](https://github.com/edluj/frutis/issues/3) | Rol que autoriza devoluciones (no existe Supervisor) | Refinement de requisitos | Menor |
+| [SC-03](https://github.com/edluj/frutis/issues/4) | Cuentas por cobrar sin tabla ni venta a crédito | APR, punto 3 | Mayor |
 
 El CCB las revisa en la validación del 30 de octubre, antes de crear LB-1.
 
@@ -223,6 +223,6 @@ QA audita cada línea base antes de etiquetarla, y el estado de la configuració
 - [x] Crear la estructura de carpetas, mover el prototipo a `legacy/` y ampliar el `.gitignore`.
 - [x] Agregar la plantilla de Pull Request y la de solicitud de cambio.
 - [ ] Renombrar `master` a `main`, crear `develop` y activar las reglas de protección.
-- [ ] Registrar SC-01 a SC-03 como issues antes del 30 de octubre.
+- [x] Registrar SC-01 a SC-03 como issues (#2, #3 y #4).
 - [ ] Invitar como colaboradores a los 6 integrantes del equipo.
 - [ ] Subir a `docs/` los documentos EC-01 a EC-05.
