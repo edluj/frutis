@@ -37,11 +37,12 @@ INSERT INTO usuarios (id_usuario, nombre_completo, usuario, correo, password_has
   (3, 'Compras de prueba',       'compras1',  'compras1@frutis.test',  'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 3),
   (4, 'Contador de prueba',      'contador1', 'contador1@frutis.test', 'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 4);
 
-INSERT INTO metodos_pago (id_metodo, nombre, clave_sat, es_efectivo) VALUES
-  (1, 'Efectivo',           '01', TRUE),
-  (2, 'Tarjeta de débito',  '28', FALSE),
-  (3, 'Tarjeta de crédito', '04', FALSE),
-  (4, 'Transferencia',      '03', FALSE);
+INSERT INTO metodos_pago (id_metodo, nombre, clave_sat, es_efectivo, es_credito) VALUES
+  (1, 'Efectivo',           '01', TRUE,  FALSE),
+  (2, 'Tarjeta de débito',  '28', FALSE, FALSE),
+  (3, 'Tarjeta de crédito', '04', FALSE, FALSE),
+  (4, 'Transferencia',      '03', FALSE, FALSE),
+  (5, 'Crédito',            '99', FALSE, TRUE);
 
 INSERT INTO categorias (id_categoria, nombre, descripcion) VALUES
   (1, 'Frutas',   'Fruta fresca'),
@@ -77,6 +78,11 @@ INSERT INTO cuentas_por_pagar (id_cxp, id_lote, monto_total, saldo, fecha_vencim
 
 INSERT INTO clientes_fiscales (id_cliente, rfc, razon_social, regimen_fiscal, codigo_postal, correo) VALUES
   (1, 'XAXX010101000', 'PUBLICO EN GENERAL', '616', '06000', 'facturas@frutis.test');
+
+-- Clientes de crédito (SC-03)
+INSERT INTO clientes_credito (id_cliente_credito, nombre, telefono, limite_credito, dias_credito) VALUES
+  (1, 'Fonda Doña Lupe',       '5555550202', 1000.00, 15),
+  (2, 'Restaurante El Huerto', '5555550303',  100.00,  7);
 
 -- Caja abierta del cajero de prueba
 INSERT INTO cajas_pos (id_caja, terminal, id_usuario, fondo_inicial) VALUES

@@ -166,15 +166,15 @@ Un elemento que ya está en línea base solo cambia con una solicitud aprobada; 
 5. **Implementación.** Una rama que referencia el issue (`fix/<issue>-...` o `feature/HU-xx-...`) y un Pull Request que lo cierra.
 6. **Verificación y cierre.** QA verifica, se actualizan los documentos afectados y `CHANGELOG.md`, y se cierra el issue.
 
-**Solicitudes de cambio abiertas.**
+**Solicitudes de cambio.**
 
-| ID | Cambio | Origen | Clase propuesta |
-| --- | --- | --- | --- |
-| [SC-01](https://github.com/edluj/frutis/issues/2) | Seis tablas de soporte fuera de las 14 cotizadas | Documento de Arquitectura | Mayor |
-| [SC-02](https://github.com/edluj/frutis/issues/3) | Rol que autoriza devoluciones (no existe Supervisor) | Refinement de requisitos | Menor |
-| [SC-03](https://github.com/edluj/frutis/issues/4) | Cuentas por cobrar sin tabla ni venta a crédito | APR, punto 3 | Mayor |
+| ID | Cambio | Origen | Clase | Decisión (29/10/2026) |
+| --- | --- | --- | --- | --- |
+| [SC-01](https://github.com/edluj/frutis/issues/2) | Seis tablas de soporte fuera de las 14 cotizadas | Documento de Arquitectura | Mayor | Aprobado sin costo adicional |
+| [SC-02](https://github.com/edluj/frutis/issues/3) | Rol que autoriza devoluciones (no existe Supervisor) | Refinement de requisitos | Menor | Aprobado: autoriza el Administrador |
+| [SC-03](https://github.com/edluj/frutis/issues/4) | Cuentas por cobrar sin tabla ni venta a crédito | APR, punto 3 | Mayor | Aprobado: sí hay venta a crédito; costo por confirmar |
 
-El CCB las revisa en la validación del 30 de octubre, antes de crear LB-1.
+El CCB las resolvió el 29 de octubre de 2026, antes de crear LB-1.
 
 ## 8. Respaldo, recuperación y entornos
 

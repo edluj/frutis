@@ -51,8 +51,8 @@ DELIMITER ;
 
 CALL t_ok(
   (SELECT COUNT(*) FROM information_schema.tables
-   WHERE table_schema = 'frutis' AND table_type = 'BASE TABLE') = 20,
-  'El esquema tiene 20 tablas (14 de la cotización + 6 de soporte)');
+   WHERE table_schema = 'frutis' AND table_type = 'BASE TABLE') = 23,
+  'El esquema tiene 23 tablas (14 de la cotización + 6 de SC-01 + 3 de SC-03)');
 
 CALL t_ok(
   (SELECT COUNT(*) FROM information_schema.tables
@@ -73,7 +73,7 @@ CALL t_espera_error('SELECT fn_importe_peso(999, 1) INTO @x', 'Producto no encon
 -- -----------------------------------------------------------------------------
 
 -- 3 kg de manzana en efectivo: 2 kg salen del lote que caduca antes y 1 kg del siguiente
-CALL sp_registrar_venta(1, 2, 1, 200.00, '[{"id_producto": 1, "cantidad": 3}]', @venta, @folio, @total, @cambio);
+CALL sp_registrar_venta(1, 2, 1, 200.00, NULL, '[{"id_producto": 1, "cantidad": 3}]', @venta, @folio, @total, @cambio);
 
 CALL t_ok(@folio = 'V00000001', 'El primer ticket recibe el folio V00000001');
 CALL t_ok(@total = 135.00 AND @cambio = 65.00, 'Total 135.00 y cambio 65.00 sobre 200.00 recibidos');
@@ -87,7 +87,7 @@ CALL t_ok((SELECT total = subtotal + iva AND estatus = 'pagada' FROM ventas_cabe
           'La cabecera cuadra: total = subtotal + IVA');
 
 -- Producto repetido en el carrito y pago con tarjeta (sin monto recibido)
-CALL sp_registrar_venta(1, 2, 2, NULL,
+CALL sp_registrar_venta(1, 2, 2, NULL, NULL,
   '[{"id_producto": 2, "cantidad": 1.255}, {"id_producto": 2, "cantidad": 0.745}, {"id_producto": 4, "cantidad": 2}]',
   @venta2, @folio2, @total2, @cambio2);
 
@@ -105,48 +105,107 @@ SET @ventas_antes = (SELECT COUNT(*) FROM ventas_cabecera);
 SET @detalle_antes = (SELECT COUNT(*) FROM ventas_detalle);
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 1, 10.00, ''[{"id_producto": 3, "cantidad": 1}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 1, 10.00, NULL, ''[{"id_producto": 3, "cantidad": 1}]'', @a, @b, @c, @d)',
   'El monto recibido es insuficiente.', 'Rechaza monto recibido menor al total');
 CALL t_ok((SELECT cantidad_disponible FROM inventario WHERE id_inventario = 5) = 8.000,
           'Rollback: el aguacate conserva sus 8 kg');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 1, 500.00, ''[{"id_producto": 1, "cantidad": 1}, {"id_producto": 6, "cantidad": 2}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 1, 500.00, NULL, ''[{"id_producto": 1, "cantidad": 1}, {"id_producto": 6, "cantidad": 2}]'', @a, @b, @c, @d)',
   'Producto sin existencia suficiente: Limón', 'Rechaza producto sin existencia suficiente');
 CALL t_ok((SELECT cantidad_disponible FROM inventario WHERE id_inventario = 4) = 9.000
       AND (SELECT cantidad_disponible FROM inventario WHERE id_inventario = 7) = 1.500,
           'Rollback: no descuenta la manzana ya procesada ni el limón');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 1, 500.00, ''[{"id_producto": 4, "cantidad": 1.5}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 1, 500.00, NULL, ''[{"id_producto": 4, "cantidad": 1.5}]'', @a, @b, @c, @d)',
   'Los productos por pieza', 'Rechaza piezas fraccionadas');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 1, 500.00, ''[]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 1, 500.00, NULL, ''[]'', @a, @b, @c, @d)',
   'El carrito está vacío.', 'Rechaza carrito vacío');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 1, 500.00, ''[{"id_producto": 999, "cantidad": 1}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 1, 500.00, NULL, ''[{"id_producto": 999, "cantidad": 1}]'', @a, @b, @c, @d)',
   'Producto no encontrado', 'Rechaza producto inexistente');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 1, 500.00, ''[{"id_producto": 1, "cantidad": -2}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 1, 500.00, NULL, ''[{"id_producto": 1, "cantidad": -2}]'', @a, @b, @c, @d)',
   'Cantidad inválida.', 'Rechaza cantidad negativa');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(1, 2, 9, 500.00, ''[{"id_producto": 1, "cantidad": 1}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(1, 2, 9, 500.00, NULL, ''[{"id_producto": 1, "cantidad": 1}]'', @a, @b, @c, @d)',
   'Método de pago inválido.', 'Rechaza método de pago inexistente');
 
 INSERT INTO cajas_pos (id_caja, terminal, id_usuario, fondo_inicial, fecha_cierre, efectivo_esperado, efectivo_contado, diferencia, estatus)
 VALUES (2, 'POS-02', 2, 300.00, NOW(), 300.00, 300.00, 0.00, 'cerrada');
 
 CALL t_espera_error(
-  'CALL sp_registrar_venta(2, 2, 1, 500.00, ''[{"id_producto": 1, "cantidad": 1}]'', @a, @b, @c, @d)',
+  'CALL sp_registrar_venta(2, 2, 1, 500.00, NULL, ''[{"id_producto": 1, "cantidad": 1}]'', @a, @b, @c, @d)',
   'No hay una caja abierta.', 'Rechaza cobro en caja cerrada');
 
 CALL t_ok((SELECT COUNT(*) FROM ventas_cabecera) = @ventas_antes
       AND (SELECT COUNT(*) FROM ventas_detalle) = @detalle_antes,
           'Ningún cobro fallido deja ventas o renglones a medias');
+
+-- -----------------------------------------------------------------------------
+-- SC-03: venta a crédito y cobros a clientes
+-- -----------------------------------------------------------------------------
+
+-- 1 kg de aguacate a crédito para la Fonda Doña Lupe (límite 1000.00, 15 días)
+CALL sp_registrar_venta(1, 2, 5, NULL, 1, '[{"id_producto": 3, "cantidad": 1}]', @venta3, @folio3, @total3, @cambio3);
+
+CALL t_ok(@total3 = 68.00 AND @cambio3 = 0.00, 'Venta a crédito de 68.00 sin cambio');
+CALL t_ok((SELECT saldo = 68.00 AND estatus = 'pendiente' AND fecha_vencimiento = CURDATE() + INTERVAL 15 DAY
+           FROM cuentas_por_cobrar WHERE id_venta = @venta3),
+          'La venta a crédito crea la cuenta por cobrar con vencimiento a 15 días');
+
+CALL t_espera_error(
+  'CALL sp_registrar_venta(1, 2, 5, NULL, NULL, ''[{"id_producto": 3, "cantidad": 1}]'', @a, @b, @c, @d)',
+  'Cliente de crédito no encontrado', 'Rechaza venta a crédito sin cliente');
+
+-- 2 kg de aguacate (136.00) superan el límite de 100.00 del Restaurante El Huerto
+CALL t_espera_error(
+  'CALL sp_registrar_venta(1, 2, 5, NULL, 2, ''[{"id_producto": 3, "cantidad": 2}]'', @a, @b, @c, @d)',
+  'El cliente excede su límite de crédito.', 'Rechaza venta que rebasa el límite de crédito');
+CALL t_ok((SELECT cantidad_disponible FROM inventario WHERE id_inventario = 5) = 7.000,
+          'Rollback: la venta rechazada por límite no descuenta inventario');
+
+SET @cxc = (SELECT id_cxc FROM cuentas_por_cobrar WHERE id_venta = @venta3);
+
+CALL sp_registrar_cobro(@cxc, 50.00, 1, 1, 2, @saldo);
+CALL t_ok(@saldo = 18.00 AND (SELECT estatus FROM cuentas_por_cobrar WHERE id_cxc = @cxc) = 'pendiente',
+          'Un abono parcial deja saldo de 18.00 pendiente');
+
+CALL t_espera_error('CALL sp_registrar_cobro(@cxc, 20.00, 1, 1, 2, @s)', 'El cobro no puede ser mayor al saldo.',
+                    'Rechaza un cobro mayor al saldo');
+CALL t_espera_error('CALL sp_registrar_cobro(@cxc, 10.00, 5, NULL, 2, @s)', 'Método de pago inválido para un cobro.',
+                    'Rechaza cobrar con el método Crédito');
+CALL t_espera_error('CALL sp_registrar_cobro(@cxc, 10.00, 1, 2, 2, @s)', 'No hay una caja abierta.',
+                    'Rechaza cobro en caja cerrada');
+
+CALL sp_registrar_cobro(@cxc, 18.00, 4, NULL, 4, @saldo);
+CALL t_ok(@saldo = 0.00 AND (SELECT estatus FROM cuentas_por_cobrar WHERE id_cxc = @cxc) = 'pagada',
+          'El abono final liquida la cuenta y la marca como pagada');
+CALL t_ok((SELECT SUM(monto) FROM cobros_clientes WHERE id_cxc = @cxc) = 68.00,
+          'Los cobros registrados suman el total de la venta');
+CALL t_ok((SELECT estatus FROM v_cuentas_por_cobrar WHERE id_cxc = @cxc) = 'Pagada',
+          'v_cuentas_por_cobrar muestra la cuenta como Pagada');
+
+-- -----------------------------------------------------------------------------
+-- SC-02: solo un Administrador autoriza devoluciones
+-- -----------------------------------------------------------------------------
+
+CALL t_espera_error(
+  'INSERT INTO devoluciones (folio, id_venta, id_detalle, id_caja, cantidad, importe, motivo, estado_producto, id_usuario, id_autoriza) VALUES (''D-1'', 1, 1, 1, 0.5, 15.00, ''Golpeada'', ''danado'', 2, 2)',
+  'Solo un Administrador puede autorizar devoluciones.', 'Un cajero no puede autorizar devoluciones');
+
+INSERT INTO devoluciones (folio, id_venta, id_detalle, id_caja, cantidad, importe, motivo, estado_producto, id_usuario, id_autoriza)
+VALUES ('D-1', 1, 1, 1, 0.5, 15.00, 'Golpeada', 'danado', 2, 1);
+CALL t_ok((SELECT COUNT(*) FROM devoluciones WHERE folio = 'D-1') = 1, 'El Administrador sí autoriza devoluciones');
+
+CALL t_espera_error('UPDATE devoluciones SET id_autoriza = 4 WHERE folio = ''D-1''',
+  'Solo un Administrador puede autorizar devoluciones.', 'No se puede cambiar el autorizador a otro rol');
 
 -- -----------------------------------------------------------------------------
 -- Reglas del esquema
