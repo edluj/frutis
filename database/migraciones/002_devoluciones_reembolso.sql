@@ -16,6 +16,8 @@
 -- se podía registrar en caja.
 -- =============================================================================
 
+-- Aplicada si: SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'frutis' AND table_name = 'devoluciones' AND column_name = 'reembolso'
+
 USE frutis;
 
 ALTER TABLE devoluciones

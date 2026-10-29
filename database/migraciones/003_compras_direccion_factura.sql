@@ -9,6 +9,8 @@
 --   mysql -h 127.0.0.1 -u root -p < database/migraciones/003_compras_direccion_factura.sql
 -- =============================================================================
 
+-- Aplicada si: SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'frutis' AND table_name = 'proveedores' AND column_name = 'direccion'
+
 USE frutis;
 
 ALTER TABLE proveedores

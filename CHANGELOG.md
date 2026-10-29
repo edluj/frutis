@@ -4,6 +4,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+## [1.0.1] - 2026-11-27
+
+Recupera el instalador del servidor de base de datos del PR #8, que se integró en `fix/4-venta-a-credito` después de que esa rama entró a `develop` y no llegó a la versión 1.0.0.
+
+### Agregado
+- Instalador del servidor de base de datos para Rocky Linux 10 (`deploy/rocky-linux/`): MySQL 8.4, usuarios con mínimo privilegio, firewall por red y respaldo diario con systemd.
+- La CI prueba el esquema en MySQL 8.0 y 8.4, el instalador en un contenedor de Rocky Linux 10 y los scripts con shellcheck.
+- `database/instalar.sh --migraciones`: aplica en una base existente solo las migraciones que le falten; cada migración indica con `-- Aplicada si:` cómo saberlo. La CI comprueba que en una base nueva todas se reconocen como aplicadas.
+
+### Cambiado
+- `database/instalar.sh` admite `--solo-rutinas` para actualizar función y procedimientos sin tocar datos.
+- El instalador del servidor, sobre una base existente, aplica las migraciones pendientes antes de actualizar las rutinas, y su verificación espera las 7 rutinas de la versión 1.0.0 (antes 3).
+
 ## [1.0.0] - 2026-11-27
 
 Entrega del proyecto (LB-5) con el alcance de SC-05 (#19): sin báscula ni impresora reales, timbrado con PAC simulado. Ejecutables `Frutis.exe` (Windows) y `Frutis` (Linux) en el Release de GitHub.
