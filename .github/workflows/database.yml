@@ -15,7 +15,7 @@ on:
 jobs:
   mysql:
     name: Esquema y pruebas en MySQL 8.0
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       mysql:
         image: mysql:8.0
@@ -29,7 +29,7 @@ jobs:
           --health-timeout=5s
           --health-retries=30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Instalar esquema, función, procedimiento, datos y pruebas
         env:
