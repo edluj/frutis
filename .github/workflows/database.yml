@@ -59,7 +59,7 @@ jobs:
     container: rockylinux/rockylinux:10
     steps:
       - name: Herramientas base del contenedor
-        run: dnf -y install git hostname procps-ng gawk util-linux findutils gzip
+        run: dnf -y install git hostname procps-ng gawk util-linux findutils gzip libcap
 
       - uses: actions/checkout@v5
 
@@ -72,6 +72,8 @@ jobs:
           case "$*" in
             "restart mysqld")
               pkill -x mysqld && sleep 5
+              # mysqld trae la capacidad cap_sys_nice, que Docker no deja ejecutar
+              setcap -r /usr/libexec/mysqld 2>/dev/null || true
               /usr/libexec/mysql-prepare-db-dir mysqld.service
               runuser -u mysql -- /usr/libexec/mysqld --basedir=/usr >>/tmp/mysqld.log 2>&1 &
               ;;
