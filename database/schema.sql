@@ -2,8 +2,12 @@
 -- Frutis ERP + POS · Esquema de base de datos (EC-08)
 -- MySQL 8.0 (>= 8.0.16) · InnoDB · utf8mb4
 --
--- 14 tablas de la cotización + 6 tablas de soporte propuestas en SC-01 (#2):
---   roles, permisos, auditoria, clientes_fiscales, devoluciones, historial_precios.
+-- 23 tablas:
+--   * 14 de la cotización.
+--   * 6 de soporte aprobadas en SC-01 (#2), sin costo adicional:
+--     roles, permisos, auditoria, clientes_fiscales, devoluciones, historial_precios.
+--   * 3 de venta a crédito aprobadas en SC-03 (#4):
+--     clientes_credito, cuentas_por_cobrar, cobros_clientes.
 --
 -- Convenciones:
 --   * Nombres de tablas y columnas en minúsculas con guion bajo, para que el
@@ -256,9 +260,11 @@ CREATE TABLE metodos_pago (
   nombre       VARCHAR(40)      NOT NULL,
   clave_sat    CHAR(2)          NOT NULL COMMENT 'Forma de pago del catálogo c_FormaPago del SAT',
   es_efectivo  BOOLEAN          NOT NULL DEFAULT FALSE COMMENT 'TRUE = exige monto recibido y calcula cambio',
+  es_credito   BOOLEAN          NOT NULL DEFAULT FALSE COMMENT 'TRUE = venta a crédito; genera una cuenta por cobrar (SC-03)',
   activo       BOOLEAN          NOT NULL DEFAULT TRUE,
   CONSTRAINT pk_metodos_pago PRIMARY KEY (id_metodo),
-  CONSTRAINT uq_metodos_nombre UNIQUE (nombre)
+  CONSTRAINT uq_metodos_nombre UNIQUE (nombre),
+  CONSTRAINT ck_metodos_tipo CHECK (NOT (es_efectivo AND es_credito))
 ) ENGINE=InnoDB COMMENT='Métodos de pago';
 
 -- Cotización · Flujo D (una fila por turno de caja)
@@ -269,7 +275,7 @@ CREATE TABLE cajas_pos (
   fondo_inicial      DECIMAL(12,2) NOT NULL,
   fecha_apertura     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   fecha_cierre       DATETIME      NULL,
-  efectivo_esperado  DECIMAL(12,2) NULL COMMENT 'fondo + ventas en efectivo - devoluciones en efectivo',
+  efectivo_esperado  DECIMAL(12,2) NULL COMMENT 'fondo + ventas en efectivo + cobros en efectivo - devoluciones en efectivo',
   efectivo_contado   DECIMAL(12,2) NULL,
   diferencia         DECIMAL(12,2) NULL COMMENT 'contado - esperado',
   observaciones      VARCHAR(255)  NULL,
@@ -441,6 +447,66 @@ CREATE TABLE gastos_operativos (
   INDEX idx_gastos_fecha (fecha, tipo)
 ) ENGINE=InnoDB COMMENT='Egresos: gastos operativos y pagos a proveedores';
 
+-- SC-03 (#4) · Flujo N: clientes a los que se vende a crédito
+CREATE TABLE clientes_credito (
+  id_cliente_credito  INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+  nombre              VARCHAR(150)      NOT NULL,
+  telefono            VARCHAR(20)       NOT NULL,
+  correo              VARCHAR(120)      NULL,
+  id_cliente          INT UNSIGNED      NULL COMMENT 'Datos fiscales, si el cliente también pide factura',
+  limite_credito      DECIMAL(12,2)     NOT NULL COMMENT 'Saldo pendiente máximo permitido',
+  dias_credito        SMALLINT UNSIGNED NOT NULL DEFAULT 15,
+  activo              BOOLEAN           NOT NULL DEFAULT TRUE,
+  creado_en           DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en      DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT pk_clientes_credito PRIMARY KEY (id_cliente_credito),
+  CONSTRAINT fk_clientes_credito_fiscal FOREIGN KEY (id_cliente) REFERENCES clientes_fiscales (id_cliente),
+  CONSTRAINT ck_clientes_credito_limite CHECK (limite_credito > 0),
+  CONSTRAINT ck_clientes_credito_dias CHECK (dias_credito > 0),
+  INDEX idx_clientes_credito_nombre (nombre)
+) ENGINE=InnoDB COMMENT='Clientes con venta a crédito (SC-03)';
+
+-- SC-03 (#4) · Flujo N: un adeudo por cada venta a crédito
+CREATE TABLE cuentas_por_cobrar (
+  id_cxc              INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  id_venta            INT UNSIGNED  NOT NULL,
+  id_cliente_credito  INT UNSIGNED  NOT NULL,
+  monto_total         DECIMAL(12,2) NOT NULL,
+  saldo               DECIMAL(12,2) NOT NULL,
+  fecha_vencimiento   DATE          NOT NULL COMMENT 'fecha de la venta + días de crédito del cliente',
+  estatus             ENUM('pendiente','pagada') NOT NULL DEFAULT 'pendiente' COMMENT 'Vencida se calcula en v_cuentas_por_cobrar',
+  creado_en           DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT pk_cuentas_por_cobrar PRIMARY KEY (id_cxc),
+  CONSTRAINT uq_cxc_venta UNIQUE (id_venta),
+  CONSTRAINT fk_cxc_venta FOREIGN KEY (id_venta) REFERENCES ventas_cabecera (id_venta),
+  CONSTRAINT fk_cxc_cliente FOREIGN KEY (id_cliente_credito) REFERENCES clientes_credito (id_cliente_credito),
+  CONSTRAINT ck_cxc_monto CHECK (monto_total > 0),
+  CONSTRAINT ck_cxc_saldo CHECK (saldo >= 0 AND saldo <= monto_total),
+  CONSTRAINT ck_cxc_estatus CHECK ((estatus = 'pagada') = (saldo = 0)),
+  INDEX idx_cxc_cliente (id_cliente_credito, estatus),
+  INDEX idx_cxc_vencimiento (estatus, fecha_vencimiento)
+) ENGINE=InnoDB COMMENT='Adeudos de clientes por ventas a crédito (SC-03)';
+
+-- SC-03 (#4) · Flujo N: abonos de los clientes; entran al flujo de efectivo
+CREATE TABLE cobros_clientes (
+  id_cobro    INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+  id_cxc      INT UNSIGNED     NOT NULL,
+  monto       DECIMAL(12,2)    NOT NULL,
+  id_metodo   TINYINT UNSIGNED NOT NULL,
+  id_caja     INT UNSIGNED     NULL COMMENT 'Turno de caja donde se recibió; si es efectivo entra al corte',
+  id_usuario  INT UNSIGNED     NOT NULL,
+  fecha       DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pk_cobros_clientes PRIMARY KEY (id_cobro),
+  CONSTRAINT fk_cobros_cxc FOREIGN KEY (id_cxc) REFERENCES cuentas_por_cobrar (id_cxc),
+  CONSTRAINT fk_cobros_metodo FOREIGN KEY (id_metodo) REFERENCES metodos_pago (id_metodo),
+  CONSTRAINT fk_cobros_caja FOREIGN KEY (id_caja) REFERENCES cajas_pos (id_caja),
+  CONSTRAINT fk_cobros_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario),
+  CONSTRAINT ck_cobros_monto CHECK (monto > 0),
+  INDEX idx_cobros_cxc (id_cxc),
+  INDEX idx_cobros_fecha (fecha)
+) ENGINE=InnoDB COMMENT='Cobros a clientes de crédito (SC-03)';
+
 -- -----------------------------------------------------------------------------
 -- Vistas
 -- -----------------------------------------------------------------------------
@@ -480,11 +546,58 @@ FROM cuentas_por_pagar c
 JOIN lotes_compras l ON l.id_lote = c.id_lote
 JOIN proveedores pr ON pr.id_proveedor = l.id_proveedor;
 
+-- Cuentas por cobrar con estatus calculado (flujo N, SC-03)
+CREATE VIEW v_cuentas_por_cobrar AS
+SELECT
+  c.id_cxc,
+  v.folio AS folio_venta,
+  cc.id_cliente_credito,
+  cc.nombre AS cliente,
+  c.monto_total,
+  c.saldo,
+  c.fecha_vencimiento,
+  CASE
+    WHEN c.estatus = 'pagada' THEN 'Pagada'
+    WHEN c.fecha_vencimiento < CURDATE() THEN 'Vencida'
+    ELSE 'Pendiente'
+  END AS estatus,
+  (c.estatus = 'pendiente' AND c.fecha_vencimiento BETWEEN CURDATE() AND CURDATE() + INTERVAL 3 DAY) AS por_vencer
+FROM cuentas_por_cobrar c
+JOIN ventas_cabecera v ON v.id_venta = c.id_venta
+JOIN clientes_credito cc ON cc.id_cliente_credito = c.id_cliente_credito;
+
 -- -----------------------------------------------------------------------------
--- Triggers: la bitácora de auditoría es de solo lectura (flujo V)
+-- Triggers
 -- -----------------------------------------------------------------------------
 
 DELIMITER $$
+
+-- SC-02 (#3): solo un usuario activo con el rol de sistema (Administrador) autoriza devoluciones
+CREATE TRIGGER trg_devoluciones_autoriza_alta
+BEFORE INSERT ON devoluciones
+FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM usuarios u JOIN roles r ON r.id_rol = u.id_rol
+    WHERE u.id_usuario = NEW.id_autoriza AND u.activo = TRUE AND r.es_sistema = TRUE
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo un Administrador puede autorizar devoluciones.';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_devoluciones_autoriza_cambio
+BEFORE UPDATE ON devoluciones
+FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM usuarios u JOIN roles r ON r.id_rol = u.id_rol
+    WHERE u.id_usuario = NEW.id_autoriza AND u.activo = TRUE AND r.es_sistema = TRUE
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo un Administrador puede autorizar devoluciones.';
+  END IF;
+END$$
+
+-- La bitácora de auditoría es de solo lectura (flujo V)
 
 CREATE TRIGGER trg_auditoria_sin_cambios
 BEFORE UPDATE ON auditoria

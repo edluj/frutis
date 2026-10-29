@@ -7,18 +7,21 @@
 --   3. Descuenta inventario por lote, primero el que caduca antes (FEFO), y
 --      escribe un renglón de ventas_detalle por cada lote usado.
 --   4. Calcula subtotal, IVA, total y cambio; valida el monto recibido.
+--      En venta a crédito (SC-03) valida el límite del cliente y crea la cuenta por cobrar.
 --   5. COMMIT. Ante cualquier error hace ROLLBACK y devuelve el mensaje.
 --
 -- Entrada:
 --   p_carrito  JSON con los renglones: [{"id_producto": 1, "cantidad": 1.250}, ...]
 --              cantidad = kg para productos por kilo, piezas para productos por pieza.
 --   p_monto_recibido  efectivo entregado por el cliente; se ignora en pagos que no son en efectivo.
+--   p_id_cliente_credito  cliente de crédito; obligatorio solo con un método de pago de crédito.
 --
 -- Mensajes de error (SQLSTATE 45000), los mismos del APR flujo C:
 --   'El carrito está vacío.' · 'No hay una caja abierta.' · 'Método de pago inválido.'
 --   'Cantidad inválida.' · 'Producto no encontrado o inactivo.'
 --   'Los productos por pieza se venden en cantidades enteras.'
 --   'Producto sin existencia suficiente: <nombre>' · 'El monto recibido es insuficiente.'
+--   'Cliente de crédito no encontrado o inactivo.' · 'El cliente excede su límite de crédito.'
 -- =============================================================================
 
 USE frutis;
@@ -32,6 +35,7 @@ CREATE PROCEDURE sp_registrar_venta(
   IN  p_id_usuario      INT UNSIGNED,
   IN  p_id_metodo       TINYINT UNSIGNED,
   IN  p_monto_recibido  DECIMAL(12,2),
+  IN  p_id_cliente_credito INT UNSIGNED,
   IN  p_carrito         JSON,
   OUT p_id_venta        INT UNSIGNED,
   OUT p_folio           VARCHAR(20),
@@ -43,6 +47,10 @@ COMMENT 'Cobro POS transaccional con descuento FEFO por lote'
 BEGIN
   DECLARE v_estatus_caja  VARCHAR(10)      DEFAULT NULL;
   DECLARE v_es_efectivo   BOOLEAN          DEFAULT NULL;
+  DECLARE v_es_credito    BOOLEAN          DEFAULT NULL;
+  DECLARE v_limite        DECIMAL(12,2)    DEFAULT NULL;
+  DECLARE v_dias_credito  SMALLINT UNSIGNED DEFAULT 0;
+  DECLARE v_adeudo        DECIMAL(12,2)    DEFAULT 0;
   DECLARE v_producto      INT UNSIGNED     DEFAULT 0;
   DECLARE v_ultimo        INT UNSIGNED     DEFAULT 0;
   DECLARE v_pendiente     DECIMAL(10,3)    DEFAULT 0;
@@ -83,12 +91,24 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No hay una caja abierta.';
   END IF;
 
-  SELECT es_efectivo INTO v_es_efectivo
+  SELECT es_efectivo, es_credito INTO v_es_efectivo, v_es_credito
   FROM metodos_pago
   WHERE id_metodo = p_id_metodo AND activo = TRUE;
 
   IF v_es_efectivo IS NULL THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Método de pago inválido.';
+  END IF;
+
+  -- Venta a crédito: el cliente se bloquea para que dos cobros simultáneos no rebasen su límite
+  IF v_es_credito THEN
+    SELECT limite_credito, dias_credito INTO v_limite, v_dias_credito
+    FROM clientes_credito
+    WHERE id_cliente_credito = p_id_cliente_credito AND activo = TRUE
+    FOR UPDATE;
+
+    IF v_limite IS NULL THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cliente de crédito no encontrado o inactivo.';
+    END IF;
   END IF;
 
   -- 2. Carrito: un renglón por producto (suma cantidades repetidas)
@@ -197,6 +217,16 @@ BEGIN
     SET v_recibido = v_total;
   END IF;
 
+  IF v_es_credito THEN
+    SELECT COALESCE(SUM(saldo), 0) INTO v_adeudo
+    FROM cuentas_por_cobrar
+    WHERE id_cliente_credito = p_id_cliente_credito AND estatus = 'pendiente';
+
+    IF v_adeudo + v_total > v_limite THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El cliente excede su límite de crédito.';
+    END IF;
+  END IF;
+
   UPDATE ventas_cabecera
   SET folio          = p_folio,
       subtotal       = v_total - v_iva,
@@ -205,6 +235,11 @@ BEGIN
       monto_recibido = v_recibido,
       cambio         = v_recibido - v_total
   WHERE id_venta = p_id_venta;
+
+  IF v_es_credito THEN
+    INSERT INTO cuentas_por_cobrar (id_venta, id_cliente_credito, monto_total, saldo, fecha_vencimiento)
+    VALUES (p_id_venta, p_id_cliente_credito, v_total, v_total, CURDATE() + INTERVAL v_dias_credito DAY);
+  END IF;
 
   COMMIT;
   DROP TEMPORARY TABLE IF EXISTS tmp_carrito;
