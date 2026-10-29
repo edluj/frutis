@@ -1,0 +1,37 @@
+name: Base de datos
+
+on:
+  pull_request:
+    paths:
+      - 'database/**'
+      - '.github/workflows/database.yml'
+  push:
+    branches: [develop, main]
+    paths:
+      - 'database/**'
+      - '.github/workflows/database.yml'
+  workflow_dispatch:
+
+jobs:
+  mysql:
+    name: Esquema y pruebas en MySQL 8.0
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar esquema, función, procedimiento, datos y pruebas
+        env:
+          MYSQL_ARGS: -h 127.0.0.1 -P 3306 -u root -proot
+        run: bash database/instalar.sh --con-pruebas
