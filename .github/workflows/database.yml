@@ -34,4 +34,14 @@ jobs:
       - name: Instalar esquema, función, procedimiento, datos y pruebas
         env:
           MYSQL_ARGS: -h 127.0.0.1 -P 3306 -u root -proot
-        run: bash database/instalar.sh --con-pruebas
+        run: |
+          set -o pipefail
+          bash database/instalar.sh --con-pruebas | tee salida.txt
+          ok=$(grep -c '^OK ' salida.txt || true)
+          echo "::notice title=Pruebas de base de datos::$ok pruebas pasaron en MySQL 8.0"
+          {
+            echo "### Pruebas de base de datos: $ok pasaron"
+            echo '```'
+            grep '^OK ' salida.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
