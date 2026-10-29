@@ -67,8 +67,7 @@ jobs:
       # MySQL, el esquema, los usuarios y el respaldo corren igual que en la VM.
       - name: Simular systemctl y timedatectl
         run: |
-          mkdir -p /opt/simulado
-          cat > /opt/simulado/systemctl <<'EOF'
+          cat > /usr/local/bin/systemctl <<'EOF'
           #!/usr/bin/env bash
           case "$*" in
             "restart mysqld")
@@ -80,15 +79,15 @@ jobs:
           esac
           exit 0
           EOF
-          cat > /opt/simulado/timedatectl <<'EOF'
+          cat > /usr/local/bin/timedatectl <<'EOF'
           #!/usr/bin/env bash
           case "$1" in
             set-timezone) echo "$2" > /tmp/zona ;;
             show) cat /tmp/zona ;;
           esac
           EOF
-          chmod +x /opt/simulado/*
-          echo /opt/simulado >> "$GITHUB_PATH"
+          chmod +x /usr/local/bin/systemctl /usr/local/bin/timedatectl
+          command -v systemctl timedatectl
 
       - name: Primera instalación (desarrollo, red 10.0.0.0/24)
         env:
