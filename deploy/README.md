@@ -10,7 +10,7 @@ Instalación del servidor local y de las terminales. Nada de esta carpeta lleva 
 
 ## Servidor (Rocky Linux)
 
-1. **Base de datos:** `database/README.md` (`instalar.sh`) y los usuarios `frutis_app` y `frutis_respaldo`.
+1. **Base de datos:** `deploy/rocky-linux/instalar_servidor_bd.sh` instala MySQL, la base, los usuarios `frutis_app` y `frutis_respaldo`, el firewall del 3306 y el respaldo diario (guía en `deploy/rocky-linux/README.md`). Para una base ya instalada basta `database/instalar.sh --migraciones`.
 2. **Configuración:** `cp deploy/.env.example deploy/.env` y llenar `FRUTIS_DB_USER`, `FRUTIS_DB_PASSWORD` y `FRUTIS_JWT_SECRET` (`openssl rand -hex 32`).
 3. **Middleware:**
    ```bash
