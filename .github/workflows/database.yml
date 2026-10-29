@@ -94,7 +94,9 @@ jobs:
         env:
           FRUTIS_MODO: desarrollo
           FRUTIS_RED_PERMITIDA: 10.0.0.0/24
-        run: bash deploy/rocky-linux/instalar_servidor_bd.sh
+        run: |
+          set -o pipefail
+          bash deploy/rocky-linux/instalar_servidor_bd.sh 2>&1 | tee /tmp/instalacion.log
 
       - name: Segunda ejecución (no debe perder datos)
         env:
@@ -114,6 +116,14 @@ jobs:
           test "$(ls /var/backups/frutis/frutis_*.sql.gz | wc -l)" -ge 2
           zcat "$(ls -t /var/backups/frutis/frutis_*.sql.gz | head -1)" | grep -q 'CREATE TABLE `ventas_cabecera`'
           echo "::notice title=Rocky Linux 10::Instalador probado con $(mysql --version | awk '{print $3}')"
+
+      - name: Publicar el error como anotación
+        if: failure()
+        run: |
+          for f in /tmp/instalacion.log /tmp/mysqld.log /var/log/mysql/mysqld.log; do
+            [ -f "$f" ] || continue
+            echo "::error title=$f::$(tail -n 40 "$f" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"
+          done
 
   scripts:
     name: Revisión de scripts de shell
