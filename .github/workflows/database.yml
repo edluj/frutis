@@ -4,21 +4,28 @@ on:
   pull_request:
     paths:
       - 'database/**'
+      - 'deploy/**'
       - '.github/workflows/database.yml'
   push:
     branches: [develop, main]
     paths:
       - 'database/**'
+      - 'deploy/**'
       - '.github/workflows/database.yml'
   workflow_dispatch:
 
 jobs:
   mysql:
-    name: Esquema y pruebas en MySQL 8.0
+    name: Esquema y pruebas en MySQL ${{ matrix.version }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.0: versión del diseño · 8.4: la que instala Rocky Linux 10 (servidor local)
+        version: ['8.0', '8.4']
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:${{ matrix.version }}
         env:
           MYSQL_ROOT_PASSWORD: root
         ports:
@@ -31,17 +38,93 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Instalar esquema, función, procedimiento, datos y pruebas
+      - name: Instalar esquema, función, procedimientos, datos y pruebas
         env:
           MYSQL_ARGS: -h 127.0.0.1 -P 3306 -u root -proot
         run: |
           set -o pipefail
           bash database/instalar.sh --con-pruebas | tee salida.txt
           ok=$(grep -c '^OK ' salida.txt || true)
-          echo "::notice title=Pruebas de base de datos::$ok pruebas pasaron en MySQL 8.0"
+          echo "::notice title=MySQL ${{ matrix.version }}::$ok pruebas pasaron en MySQL ${{ matrix.version }}"
           {
-            echo "### Pruebas de base de datos: $ok pasaron"
+            echo "### MySQL ${{ matrix.version }}: $ok pruebas pasaron"
             echo '```'
             grep '^OK ' salida.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  rocky:
+    name: Instalador en Rocky Linux 10
+    runs-on: ubuntu-24.04
+    container: rockylinux/rockylinux:10
+    steps:
+      - name: Herramientas base del contenedor
+        run: dnf -y install git hostname procps-ng gawk util-linux findutils gzip
+
+      - uses: actions/checkout@v5
+
+      # Un contenedor no tiene systemd ni firewalld: se simulan solo esas órdenes.
+      # MySQL, el esquema, los usuarios y el respaldo corren igual que en la VM.
+      - name: Simular systemctl y timedatectl
+        run: |
+          mkdir -p /opt/simulado
+          cat > /opt/simulado/systemctl <<'EOF'
+          #!/usr/bin/env bash
+          case "$*" in
+            "restart mysqld")
+              pkill -x mysqld && sleep 5
+              /usr/libexec/mysql-prepare-db-dir mysqld.service
+              runuser -u mysql -- /usr/libexec/mysqld --basedir=/usr >>/tmp/mysqld.log 2>&1 &
+              ;;
+            "is-active --quiet firewalld") exit 3 ;;
+          esac
+          exit 0
+          EOF
+          cat > /opt/simulado/timedatectl <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            set-timezone) echo "$2" > /tmp/zona ;;
+            show) cat /tmp/zona ;;
+          esac
+          EOF
+          chmod +x /opt/simulado/*
+          echo /opt/simulado >> "$GITHUB_PATH"
+
+      - name: Primera instalación (desarrollo, red 10.0.0.0/24)
+        env:
+          FRUTIS_MODO: desarrollo
+          FRUTIS_RED_PERMITIDA: 10.0.0.0/24
+        run: bash deploy/rocky-linux/instalar_servidor_bd.sh
+
+      - name: Segunda ejecución (no debe perder datos)
+        env:
+          FRUTIS_MODO: desarrollo
+          FRUTIS_RED_PERMITIDA: 10.0.0.0/24
+        run: |
+          mysql --defaults-file=/root/.my.cnf -e "INSERT INTO frutis.categorias (nombre) VALUES ('Prueba de idempotencia')"
+          bash deploy/rocky-linux/instalar_servidor_bd.sh
+          n=$(mysql --defaults-file=/root/.my.cnf -N -e "SELECT COUNT(*) FROM frutis.categorias WHERE nombre = 'Prueba de idempotencia'")
+          test "$n" = "1"
+
+      - name: Revisar usuarios y respaldos
+        run: |
+          set -e
+          mysql --defaults-file=/root/.my.cnf -t -e "SELECT user, host FROM mysql.user WHERE user LIKE 'frutis%' ORDER BY user, host"
+          ls -l /var/backups/frutis
+          test "$(ls /var/backups/frutis/frutis_*.sql.gz | wc -l)" -ge 2
+          zcat "$(ls -t /var/backups/frutis/frutis_*.sql.gz | head -1)" | grep -q 'CREATE TABLE `ventas_cabecera`'
+          echo "::notice title=Rocky Linux 10::Instalador probado con $(mysql --version | awk '{print $3}')"
+
+  scripts:
+    name: Revisión de scripts de shell
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Sintaxis y shellcheck
+        run: |
+          set -e
+          archivos=$(git ls-files '*.sh')
+          for f in $archivos; do bash -n "$f"; done
+          shellcheck -S warning $archivos
+          echo "::notice title=Scripts::$(echo "$archivos" | wc -w) scripts revisados sin advertencias"

@@ -5,6 +5,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 ## [Sin publicar]
 
 ### Agregado
+- Instalador del servidor de base de datos para Rocky Linux 10 (`deploy/rocky-linux/`): MySQL 8.4, usuarios con mínimo privilegio, firewall por red y respaldo diario con systemd.
+- La CI prueba el esquema en MySQL 8.0 y 8.4, el instalador en un contenedor de Rocky Linux 10 y los scripts con shellcheck.
 - Venta a crédito (SC-03, #4): tablas `clientes_credito`, `cuentas_por_cobrar` y `cobros_clientes`, método de pago "Crédito", `sp_registrar_cobro` y vista `v_cuentas_por_cobrar`; `sp_registrar_venta` valida el límite de crédito.
 - Solo el Administrador autoriza devoluciones (SC-02, #3), validado con triggers.
 - Base de datos MySQL 8.0 (HU-01, HU-02): esquema de 20 tablas, `fn_importe_peso`, `sp_registrar_venta` con descuento FEFO, datos de prueba, 35 pruebas e instalador.
@@ -15,6 +17,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 - `CHANGELOG.md` y nuevo `README.md`.
 
 ### Cambiado
+- `database/instalar.sh` admite `--solo-rutinas` para actualizar función y procedimientos sin tocar datos.
 - `sp_registrar_venta` recibe el parámetro `p_id_cliente_credito` después de `p_monto_recibido`.
 - El prototipo anterior (middleware TCP y clientes Tkinter) se movió a `legacy/` como referencia.
 - `.gitignore` ampliado para excluir secretos, respaldos y artefactos de empaquetado.
