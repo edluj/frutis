@@ -3,7 +3,7 @@
 API FastAPI sobre HTTPS en la red local. Es la única puerta a la base de datos.
 
 - Autenticación con token por rol y matriz de permisos por módulo.
-- Validación y sanitización con Pydantic (SQLi / XSS) y consultas siempre parametrizadas.
+- Validación con Pydantic: los filtros de texto solo admiten letras, números y puntuación básica, así que se rechazan comillas y etiquetas (SQLi / XSS). Las consultas son siempre parametrizadas.
 - Reglas de negocio y bitácora de auditoría.
 - Controladores de báscula e impresora de tickets en `app/hardware/` (EC-10).
 - Integración con el proveedor de timbrado CFDI en `app/integrations/`.

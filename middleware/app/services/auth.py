@@ -8,7 +8,7 @@ from app.schemas.auth import LoginSalida, Perfil, Permiso
 from app.security.passwords import HASH_SENUELO, verificar_password
 from app.security.tokens import crear_token
 
-CREDENCIALES_INVALIDAS = "Usuario o contraseña incorrectos."
+CREDENCIALES_INVALIDAS = "Ingrese un usuario/contraseña correcta."
 CUENTA_BLOQUEADA = "Cuenta bloqueada temporalmente por intentos fallidos."
 
 

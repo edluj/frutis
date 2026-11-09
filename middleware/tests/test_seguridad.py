@@ -72,7 +72,7 @@ def test_login_usuario_inexistente_mismo_mensaje(cliente, monkeypatch):
     monkeypatch.setattr(usuarios, "buscar_para_login", lambda c, u: None)
     r = _login(cliente, "mala")
     assert r.status_code == 401
-    assert r.json()["detail"] == "Usuario o contraseña incorrectos."
+    assert r.json()["detail"] == "Ingrese un usuario/contraseña correcta."
 
 
 def test_cuenta_bloqueada_rechaza_aun_con_password_correcta(cliente, monkeypatch):

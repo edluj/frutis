@@ -88,6 +88,25 @@ def test_falla_de_bitacora_no_anula_la_venta(cliente, cabeceras, monkeypatch, ca
     assert cliente.post("/pos/ventas", json=VENTA, headers=cabeceras).status_code == 201
 
 
+@pytest.mark.parametrize(
+    "texto",
+    ["<script>alert(1)</script>", "' OR 1=1 -- ", "manzana'; DROP TABLE x; --", 'a"b', "<img src=x>"],
+)
+@pytest.mark.parametrize("filtro", ["busqueda", "codigo"])
+def test_rechaza_inyeccion_en_filtros(cliente, cabeceras, monkeypatch, filtro, texto):
+    busqueda = MagicMock(return_value=[])
+    monkeypatch.setattr(pos, "buscar_productos", busqueda)
+    r = cliente.get("/pos/productos", params={filtro: texto}, headers=cabeceras)
+    assert r.status_code == 422
+    busqueda.assert_not_called()
+
+
+@pytest.mark.parametrize("texto", ["Limón sin semilla", "Piña", "FRU-0001", "Chile (seco) 1/2"])
+def test_acepta_texto_legitimo(cliente, cabeceras, monkeypatch, texto):
+    monkeypatch.setattr(pos, "buscar_productos", MagicMock(return_value=[]))
+    assert cliente.get("/pos/productos", params={"busqueda": texto}, headers=cabeceras).status_code == 200
+
+
 def test_sin_caja_abierta_404(cliente, cabeceras, monkeypatch):
     monkeypatch.setattr(pos, "caja_abierta_de", lambda c, u: None)
     assert cliente.get("/pos/cajas/actual", headers=cabeceras).status_code == 404
