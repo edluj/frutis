@@ -69,6 +69,7 @@ CREATE TABLE usuarios (
   intentos_fallidos  TINYINT UNSIGNED NOT NULL DEFAULT 0,
   bloqueado_hasta    DATETIME         NULL,
   ultimo_acceso      DATETIME         NULL,
+  sesion_version     INT UNSIGNED     NOT NULL DEFAULT 0 COMMENT 'Sube al cerrar sesión e invalida los tokens anteriores (SC-04)',
   creado_en          DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actualizado_en     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT pk_usuarios PRIMARY KEY (id_usuario),
