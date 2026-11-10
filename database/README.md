@@ -11,6 +11,7 @@ Scripts de MySQL 8.0 (8.0.16 o posterior, por los `CHECK` y `JSON_TABLE`). Histo
 | `seed.sql` | Datos de prueba para desarrollo; nunca datos reales |
 | `tests/test_cobro.sql` | 50 pruebas del esquema, la función y los procedimientos |
 | `instalar.sh` | Instala todo en orden |
+| `migraciones/` | Cambios para bases ya instaladas; se corren una vez, en orden |
 
 ## Instalar
 
@@ -53,6 +54,7 @@ Los nombres van en minúsculas para que el esquema funcione igual en Windows y L
 | SC-01 (#2) | Las 6 tablas de soporte se quedan, sin costo adicional | `roles`, `permisos`, `auditoria`, `clientes_fiscales`, `devoluciones`, `historial_precios` |
 | SC-02 (#3) | Solo el Administrador autoriza devoluciones | Triggers `trg_devoluciones_autoriza_*` rechazan a cualquier otro rol |
 | SC-03 (#4) | Sí hay venta a crédito | Método de pago "Crédito", `clientes_credito` con límite y días de crédito, `cuentas_por_cobrar`, `cobros_clientes`, `sp_registrar_cobro` y la vista `v_cuentas_por_cobrar` |
+| SC-04 (#14) | Cerrar sesión invalida el token (HU-14) | Columna `usuarios.sesion_version`; el middleware la incluye en el token y la sube al cerrar sesión. Bases instaladas: `migraciones/001_sc04_sesion_version.sql` |
 
 **Venta a crédito.** `sp_registrar_venta` recibe el cliente de crédito, valida que su saldo pendiente más la venta no rebase su límite y crea la cuenta por cobrar con vencimiento a los días de crédito del cliente. Los abonos se registran con `sp_registrar_cobro`; si se reciben en caja, entran al corte de ese turno.
 

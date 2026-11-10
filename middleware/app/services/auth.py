@@ -8,8 +8,11 @@ from app.schemas.auth import LoginSalida, Perfil, Permiso
 from app.security.passwords import HASH_SENUELO, verificar_password
 from app.security.tokens import crear_token
 
-CREDENCIALES_INVALIDAS = "Usuario o contraseña incorrectos."
+CREDENCIALES_INVALIDAS = "Ingrese un usuario/contraseña correcta."
 CUENTA_BLOQUEADA = "Cuenta bloqueada temporalmente por intentos fallidos."
+# Solo se muestra con la contraseña correcta: sin ella, un usuario inactivo recibe
+# CREDENCIALES_INVALIDAS y nadie puede averiguar qué usuarios existen.
+USUARIO_INACTIVO = "Usuario inactivo, contacte al administrador."
 
 
 def armar_perfil(conn: Connection, fila) -> Perfil:
@@ -27,7 +30,7 @@ def iniciar_sesion(conn: Connection, usuario: str, password: str, ip: str | None
 
     if fila is None:
         verificar_password(password, HASH_SENUELO)
-        auditoria.registrar(conn, "auth", "login_fallido", "Usuario inexistente o inactivo", ip, usuario=usuario)
+        auditoria.registrar(conn, "auth", "login_fallido", "Usuario inexistente", ip, usuario=usuario)
         conn.commit()
         raise ErrorNegocio(401, CREDENCIALES_INVALIDAS)
 
@@ -47,12 +50,19 @@ def iniciar_sesion(conn: Connection, usuario: str, password: str, ip: str | None
         conn.commit()
         raise ErrorNegocio(401, CREDENCIALES_INVALIDAS)
 
+    if not fila["activo"]:
+        auditoria.registrar(
+            conn, "auth", "login_inactivo", "Usuario o rol inactivo", ip, fila["id_usuario"], fila["usuario"]
+        )
+        conn.commit()
+        raise ErrorNegocio(403, USUARIO_INACTIVO)
+
     usuarios.registrar_acceso(conn, fila["id_usuario"])
     auditoria.registrar(conn, "auth", "login", None, ip, fila["id_usuario"], fila["usuario"])
     perfil = armar_perfil(conn, fila)
     conn.commit()
     return LoginSalida(
-        access_token=crear_token(fila["id_usuario"]),
+        access_token=crear_token(fila["id_usuario"], fila["sesion_version"]),
         expira_minutos=get_settings().session_minutes,
         perfil=perfil,
     )

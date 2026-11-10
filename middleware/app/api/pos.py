@@ -9,6 +9,7 @@ from app.errores import ErrorNegocio
 from app.repositories import pos as repositorio
 from app.schemas.pos import Caja, MetodoPago, Producto, VentaEntrada, VentaSalida
 from app.security.dependencias import UsuarioActual, requiere
+from app.security.sanitizar import PATRON_TEXTO_SEGURO
 from app.services import pos as servicio
 
 router = APIRouter(prefix="/pos", tags=["pos"])
@@ -16,8 +17,8 @@ router = APIRouter(prefix="/pos", tags=["pos"])
 
 @router.get("/productos", response_model=list[Producto], dependencies=[Depends(requiere("pos", "ver"))])
 def productos(
-    codigo: Annotated[str | None, Query(max_length=32)] = None,
-    busqueda: Annotated[str | None, Query(max_length=120)] = None,
+    codigo: Annotated[str | None, Query(max_length=32, pattern=PATRON_TEXTO_SEGURO)] = None,
+    busqueda: Annotated[str | None, Query(max_length=120, pattern=PATRON_TEXTO_SEGURO)] = None,
     frecuentes: bool = False,
     conn: Connection = Depends(get_conn),
 ):

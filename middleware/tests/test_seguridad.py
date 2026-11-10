@@ -34,14 +34,18 @@ def test_hash_corrupto_no_truena():
 def test_token_expirado_o_alterado():
     secreto = get_settings().jwt_secret.get_secret_value()
     vencido = jwt.encode(
-        {"sub": "2", "exp": datetime.now(UTC) - timedelta(minutes=1)}, secreto, algorithm=ALGORITMO
+        {"sub": "2", "ver": 0, "exp": datetime.now(UTC) - timedelta(minutes=1)}, secreto, algorithm=ALGORITMO
     )
     assert leer_token(vencido) is None
     otro = jwt.encode(
-        {"sub": "2", "exp": datetime.now(UTC) + timedelta(minutes=1)}, "x" * 40, algorithm=ALGORITMO
+        {"sub": "2", "ver": 0, "exp": datetime.now(UTC) + timedelta(minutes=1)}, "x" * 40, algorithm=ALGORITMO
     )
     assert leer_token(otro) is None
     assert leer_token("no-es-token") is None
+    sin_version = jwt.encode(
+        {"sub": "2", "exp": datetime.now(UTC) + timedelta(minutes=1)}, secreto, algorithm=ALGORITMO
+    )
+    assert leer_token(sin_version) is None
 
 
 def _login(cliente, password=PASSWORD):
@@ -55,7 +59,7 @@ def test_login_correcto(cliente, monkeypatch):
     assert r.status_code == 200
     cuerpo = r.json()
     assert cuerpo["perfil"]["rol"] == "Cajero"
-    assert leer_token(cuerpo["access_token"]) == 2
+    assert leer_token(cuerpo["access_token"]) == (2, 0)
     assert "password_hash" not in r.text
 
 
@@ -72,7 +76,7 @@ def test_login_usuario_inexistente_mismo_mensaje(cliente, monkeypatch):
     monkeypatch.setattr(usuarios, "buscar_para_login", lambda c, u: None)
     r = _login(cliente, "mala")
     assert r.status_code == 401
-    assert r.json()["detail"] == "Usuario o contraseña incorrectos."
+    assert r.json()["detail"] == "Ingrese un usuario/contraseña correcta."
 
 
 def test_cuenta_bloqueada_rechaza_aun_con_password_correcta(cliente, monkeypatch):
@@ -100,12 +104,34 @@ def test_usuario_desactivado_pierde_la_sesion(cliente, monkeypatch, cabeceras):
 def test_peticion_valida_renueva_token(cliente, cabeceras):
     r = cliente.get("/auth/me", headers=cabeceras)
     assert r.status_code == 200
-    assert leer_token(r.headers["X-Token-Renovado"]) == 2
+    assert leer_token(r.headers["X-Token-Renovado"]) == (2, 0)
 
 
 def test_logout_audita(cliente, cabeceras):
     assert cliente.post("/auth/logout", headers=cabeceras).status_code == 204
     assert auditoria.registrar.call_args.args[2] == "logout"
+
+
+def test_logout_invalida_el_token_y_sus_renovaciones(cliente, cabeceras):
+    renovado = cliente.get("/auth/me", headers=cabeceras).headers["X-Token-Renovado"]
+    assert cliente.post("/auth/logout", headers=cabeceras).status_code == 204
+    assert cliente.get("/auth/me", headers=cabeceras).status_code == 401
+    assert cliente.get("/auth/me", headers={"Authorization": f"Bearer {renovado}"}).status_code == 401
+
+
+def test_inactivo_con_password_correcta_recibe_su_mensaje(cliente, monkeypatch):
+    monkeypatch.setattr(usuarios, "buscar_para_login", lambda c, u: {**CAJERO, "activo": 0})
+    r = _login(cliente)
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Usuario inactivo, contacte al administrador."
+
+
+def test_inactivo_con_password_mala_no_se_distingue(cliente, monkeypatch):
+    monkeypatch.setattr(usuarios, "buscar_para_login", lambda c, u: {**CAJERO, "activo": 0})
+    monkeypatch.setattr(usuarios, "registrar_intento_fallido", MagicMock())
+    r = _login(cliente, "mala")
+    assert r.status_code == 401
+    assert r.json()["detail"] == "Ingrese un usuario/contraseña correcta."
 
 
 def test_rol_sin_permiso_403(cliente, monkeypatch, cabeceras):
