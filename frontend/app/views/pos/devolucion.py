@@ -18,6 +18,19 @@ REEMBOLSOS = ["Efectivo (sale de la caja)", "Reverso a tarjeta", "Transferencia"
 ESTADOS = [("Buen estado", True), ("Mal estado · merma", False)]
 
 
+def _reembolso_sugerido(metodo: str) -> int:
+    """Índice en REEMBOLSOS según cómo se pagó el ticket: una venta a crédito se abona a su
+    cuenta y solo un pago con tarjeta se revierte a tarjeta (reglas de sp_registrar_devolucion)."""
+    m = metodo.lower()
+    if m.startswith("crédito"):
+        return 3
+    if "tarjeta" in m:
+        return 1
+    if m.startswith("transferencia"):
+        return 2
+    return 0
+
+
 class DevolucionView(PaginaBase):
     def __init__(self, ctx: Contexto):
         super().__init__(ctx, "Punto de Venta", "Devolución", estado=ctx.datos.estado_conexion(),
@@ -58,11 +71,14 @@ class DevolucionView(PaginaBase):
         self.btn_procesar = boton("Procesar devolución", "primario", self._procesar)
         self.btn_procesar.setMinimumHeight(48)
         self.btn_procesar.setEnabled(False)
+        # El total también va junto al botón: en la tabla puede quedar fuera de la vista.
+        self.lbl_total = etiqueta("Total a devolver: $0.00")
+        self.lbl_total.setStyleSheet("font-weight: 800;")
         der = Card("Autorización del Administrador").agregar(
             etiqueta("Solo un usuario con rol Administrador puede autorizar devoluciones. Lo que está en mal "
                      "estado se registra como merma; lo que está en buen estado regresa al inventario.", "Muted", ajustar=True),
             Campo("Administrador", self.admin), self.campo_pass, self.btn_autorizar, self.estado_aut,
-            self.btn_procesar, boton("Cancelar", "texto", self._limpiar))
+            self.lbl_total, self.btn_procesar, boton("Cancelar", "texto", self._limpiar))
         der.setFixedWidth(310)
         self.agregar(columnas(izq, der, proporciones=[1, 0]))
         self.terminar()
@@ -86,7 +102,10 @@ class DevolucionView(PaginaBase):
             return
         if t is None:
             return
+        if self.ticket and self.ticket["folio"] != t["folio"]:
+            self._reiniciar_autorizacion()
         self.ticket = t
+        self.reembolso.setCurrentIndex(_reembolso_sugerido(t["metodo"]))
         while self.info.count():
             w = self.info.takeAt(0).widget()
             if w:
@@ -151,16 +170,20 @@ class DevolucionView(PaginaBase):
             self.tabla.item(i, 5).setText(fmt.dinero(imp) if imp else "—")
             total += imp or 0
         self.tabla.item(len(self.filas), 5).setText(fmt.dinero(total))
+        self.lbl_total.setText(f"Total a devolver: {fmt.dinero(total)}")
         self._habilitar()
 
     # ------------------------------------------------------------ autorización
     def _autorizar(self) -> None:
+        if not self.ticket:
+            self.campo_folio.error("Busca primero el ticket: la autorización vale solo para ese ticket.")
+            return
         if not self.pass_admin.text():
             self.campo_pass.error("Escribe la contraseña del Administrador.")
             return
         try:
             msg = self.intentar(self.ctx.datos.autorizar, self.admin.currentText(), self.pass_admin.text(),
-                                mostrar_dialogo=False)
+                                self.ticket["folio"], mostrar_dialogo=False)
         except ErrorNegocio as exc:
             self.campo_pass.error(exc.mensaje)
             return
@@ -173,6 +196,14 @@ class DevolucionView(PaginaBase):
             self.pass_admin.setEnabled(False)
             self.btn_autorizar.setVisible(False)
         self._habilitar()
+
+    def _reiniciar_autorizacion(self) -> None:
+        """La autorización del Administrador es por ticket: al cambiar de ticket se pide otra."""
+        self.autorizado_por = None
+        self.estado_aut.setVisible(False)
+        self.admin.setEnabled(True)
+        self.pass_admin.setEnabled(True)
+        self.btn_autorizar.setVisible(True)
 
     def _habilitar(self) -> None:
         sel, _ = self._seleccion()

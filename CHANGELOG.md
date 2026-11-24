@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 ## [Sin publicar]
 
 ### Agregado
+- Apertura, corte de caja y devoluciones de punta a punta (HU-09, HU-15, HU-30, SC-02):
+  - Base de datos: `sp_abrir_caja`, `sp_cerrar_caja`, `sp_registrar_devolucion` y `fn_efectivo_esperado`, con 48 pruebas nuevas.
+  - Middleware: rutas `POST /pos/cajas`, `GET /pos/cortes/actual`, `GET /pos/cortes/ultimo`, `POST /pos/cortes`, `GET /pos/ventas/{folio}` y `/pos/devoluciones` (administradores, autorización firmada del Administrador y registro).
+  - Frontend: las pantallas de apertura, corte y devolución ya usan el servidor.
+- Columna `devoluciones.reembolso` para saber qué devoluciones salieron del cajón; bases instaladas: `database/migraciones/002_devoluciones_reembolso.sql`.
 - Cerrar sesión invalida el token (SC-04, #14, HU-14): columna `usuarios.sesion_version` y migración `database/migraciones/001_sc04_sesion_version.sql`.
 - CI del middleware en cada Pull Request (HU-40) y rechazo de comillas y etiquetas en los filtros del POS (HU-03).
 - Esqueleto del middleware FastAPI: `/auth` (JWT, PBKDF2, límite de 5 intentos), `/pos` (productos, métodos de pago, caja actual y cobro con `sp_registrar_venta`), matriz de permisos, bitácora y pruebas.

@@ -35,7 +35,19 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /pos/productos` | `pos` ver | Filtros `codigo`, `busqueda` y `frecuentes` |
 | `GET /pos/metodos-pago` | `pos` ver | Métodos de pago activos |
 | `GET /pos/cajas/actual` | `pos` ver | Caja abierta del usuario |
+| `POST /pos/cajas` | `pos` crear | Apertura con `sp_abrir_caja`: terminal y fondo inicial; una caja abierta por terminal y por cajero (HU-15) |
 | `POST /pos/ventas` | `pos` crear | Cobro con `sp_registrar_venta`; el cajero sale del token |
+| `GET /pos/ventas/{folio}` | `pos` ver | Ticket con sus productos y lo ya devuelto |
+| `GET /pos/cortes/actual` | `pos` ver | Resumen del turno abierto: ventas por método, cobros y devoluciones en efectivo, efectivo esperado (HU-09) |
+| `GET /pos/cortes/ultimo` | `pos` ver | Último corte de una terminal (`terminal=POS-01`) |
+| `POST /pos/cortes` | `pos` crear | Arqueo y cierre con `sp_cerrar_caja`; exige observaciones si hay diferencia |
+| `GET /pos/devoluciones/administradores` | `pos` crear | Administradores activos que pueden autorizar |
+| `POST /pos/devoluciones/autorizacion` | `pos` crear | El Administrador escribe su contraseña; devuelve una autorización firmada |
+| `POST /pos/devoluciones` | `pos` crear | Devolución parcial o total con `sp_registrar_devolucion` (HU-30) |
+
+**Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
+
+**Reembolso.** Efectivo sale del cajón y se resta en el corte; una venta a crédito se reembolsa solo como abono a su cuenta; el reverso a tarjeta solo aplica a tickets pagados con tarjeta. Lo que está en buen estado regresa a su lote; lo que está en mal estado se registra como merma.
 
 **Mensajes del login (APR, flujo A).** Credenciales incorrectas o usuario inexistente: "Ingrese un usuario/contraseña correcta." Un usuario o rol inactivo recibe "Usuario inactivo, contacte al administrador." solo si la contraseña es correcta; con una contraseña incorrecta recibe el mensaje general, así el login no revela qué usuarios existen.
 

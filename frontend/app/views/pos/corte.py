@@ -33,7 +33,7 @@ class CorteView(PaginaBase):
         tabla.poner_filas(filas, total=[Celda("Efectivo esperado en caja", True), "", Celda(fmt.dinero(r["esperado"]), True)])
         izq = Card("Resumen del turno").agregar(
             tabla,
-            etiqueta("Efectivo esperado = fondo inicial + ventas en efectivo − devoluciones en efectivo. "
+            etiqueta("Efectivo esperado = fondo inicial + ventas y cobros en efectivo − devoluciones en efectivo. "
                      "Tarjeta, transferencia y crédito no entran al cajón.", "Muted", ajustar=True))
 
         self.contado = entrada(placeholder="$0.00")

@@ -348,6 +348,7 @@ CREATE TABLE devoluciones (
   importe          DECIMAL(12,2)   NOT NULL,
   motivo           VARCHAR(200)    NOT NULL,
   estado_producto  ENUM('bueno','danado') NOT NULL COMMENT 'bueno = regresa al inventario; danado = merma',
+  reembolso        ENUM('efectivo','tarjeta','transferencia','credito') NOT NULL COMMENT 'efectivo sale de la caja y entra al corte; credito descuenta la cuenta por cobrar',
   id_usuario       INT UNSIGNED    NOT NULL,
   id_autoriza      INT UNSIGNED    NOT NULL,
   fecha            DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -360,7 +361,8 @@ CREATE TABLE devoluciones (
   CONSTRAINT ck_devoluciones_cantidad CHECK (cantidad > 0),
   CONSTRAINT ck_devoluciones_importe CHECK (importe >= 0),
   INDEX idx_devoluciones_folio (folio),
-  INDEX idx_devoluciones_venta (id_venta)
+  INDEX idx_devoluciones_venta (id_venta),
+  INDEX idx_devoluciones_caja (id_caja, reembolso)
 ) ENGINE=InnoDB COMMENT='Devoluciones totales o parciales (soporte SC-01)';
 
 -- -----------------------------------------------------------------------------

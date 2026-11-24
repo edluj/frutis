@@ -36,11 +36,11 @@ class AperturaView(PaginaBase):
             self.piezas[nombre] = sb
             filas.append([nombre, sb, "$0.00"])
         self.morralla = entrada(placeholder="$0.00", alinear_derecha=True, compacto=True)
-        self.morralla.setFixedWidth(110)
+        self.morralla.setFixedWidth(88)
         self.morralla.setAccessibleName("Monedas de $5 y menores")
         self.morralla.textChanged.connect(self._recalcular)
         filas.append(["Monedas de $5 y menores", "—", self.morralla])
-        self.tabla = Tabla([Col("Denominación", estirar=True), Col("Piezas", "der", ancho=120), Col("Importe", "der", ancho=140)])
+        self.tabla = Tabla([Col("Denominación", estirar=True), Col("Piezas", "der", ancho=120), Col("Importe", "der", ancho=120)])
         self.tabla.poner_filas(filas, total=[Celda("Fondo inicial", True), "", Celda("$0.00", True)])
         self.error = etiqueta("", "Error")
         self.error.setVisible(False)

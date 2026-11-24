@@ -16,7 +16,7 @@ python -m venv .venv
 .venv/Scripts/pip install -r requirements-dev.txt     # Linux: .venv/bin/pip
 .venv/Scripts/python -m app --demo                    # sin servidor, con los datos del diseño
 .venv/Scripts/python -m app                           # contra el middleware
-.venv/Scripts/python -m pytest                        # 32 pruebas, no necesitan monitor ni servidor
+.venv/Scripts/python -m pytest                        # 42 pruebas, no necesitan monitor ni servidor
 ```
 
 **Modo demostración** (`--demo` o `FRUTIS_DEMO=1`): todo vive en memoria con los datos del lienzo de diseño (fecha de referencia: lunes 2 de noviembre de 2026) y nada se guarda. Usuarios: `alopez` (Administrador), `mperez` (Cajero), `cruiz` (Contador); `lgomez` está inactivo. Contraseña `Frutis2026!`.
@@ -57,12 +57,12 @@ Las vistas nunca llaman a la red: piden datos a un objeto `datos` (`DatosApi` o 
 
 ## Pantallas y estado de conexión
 
-Hoy el middleware expone `/auth` y `/pos` (ver `middleware/README.md`). Con el servidor ya funcionan el login, el menú por rol y el cobro (`GET /pos/productos`, `GET /pos/metodos-pago`, `GET /pos/cajas/actual`, `POST /pos/ventas`). Las demás pantallas muestran un aviso con la ruta que falta en lugar de inventar datos; en modo demostración se pueden recorrer todas.
+Hoy el middleware expone `/auth` y `/pos` (ver `middleware/README.md`). Con el servidor ya funcionan el login, el menú por rol y todo el Punto de Venta: apertura, cobro, corte y devoluciones. La caja de la apertura es la terminal de `FRUTIS_TERMINAL`. Las demás pantallas muestran un aviso con la ruta que falta en lugar de inventar datos; en modo demostración se pueden recorrer todas.
 
 | Módulo | Pantallas (código del diseño) | Historias | Ruta que falta en el middleware |
 | --- | --- | --- | --- |
 | Acceso | Login (ACC-01), Inicio y menú (ACC-02) | HU-04, HU-14, HU-21 | `/reportes/resumen-del-dia` para el resumen de inicio |
-| Punto de Venta | Apertura (POS-01), Cobro (POS-02), Corte (POS-03), Devolución (POS-04) | HU-06, 07a, 08, 09, 15, 16a, 30, 36, 38a | Apertura y corte (`/pos/cajas`, `/pos/cortes`), devoluciones, clientes de crédito |
+| Punto de Venta | Apertura (POS-01), Cobro (POS-02), Corte (POS-03), Devolución (POS-04) | HU-06, 07a, 08, 09, 15, 16a, 30, 36, 38a | Solo la lista de clientes de crédito del cobro (`/finanzas/clientes-credito`) |
 | Proveedores y Compras | Proveedores, Registrar lote, Lotes, Detalle de lote, Cuentas por pagar, Estado de cuenta (PRV-01 a 06) | HU-11, 23, 25 | `/compras/...` |
 | Facturación | Generar, Factura timbrada, Emitidas, Clientes fiscales (FAC-01 a 04) | HU-12a, 32, 33 | `/facturacion/...` y elegir PAC (R-06) |
 | Finanzas | Dashboard, Gastos, Flujo, Clientes de crédito, Cuentas por cobrar, Estado de cuenta (FIN-01 a 06) | HU-26, 27, 37, 38b, 39 | `/finanzas/...` |
