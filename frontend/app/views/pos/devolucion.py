@@ -190,6 +190,7 @@ class DevolucionView(PaginaBase):
         finally:
             self.pass_admin.clear()
         if msg:
+            self.campo_pass.error(None)
             self.autorizado_por = self.admin.currentText()
             self.estado_aut.mostrar(msg, "verde")
             self.admin.setEnabled(False)
