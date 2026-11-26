@@ -512,7 +512,7 @@ class DatosDemo:
     def administradores(self) -> list[str]:
         return [u["nombre"] for u in self.usuarios if u["rol"] == "Administrador" and u["activo"]]
 
-    def autorizar(self, nombre_admin: str, password: str) -> str:
+    def autorizar(self, nombre_admin: str, password: str, folio: str | None = None) -> str:
         """Solo un Administrador activo autoriza (SC-02, trigger en la base)."""
         u = next((x for x in self.usuarios if x["nombre"] == nombre_admin), None)
         if u is None or u["rol"] != "Administrador" or not u["activo"] or password != PASSWORD_DEMO:

@@ -1,10 +1,12 @@
-"""Datos que vienen del middleware. Hoy existen /auth y /pos (middleware/README.md).
+"""Datos que vienen del middleware. Hoy existen /auth y /pos (middleware/README.md):
+login, cobro, apertura, corte y devoluciones.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
 """
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import quote
 
 from app.api_client import ApiClient, ErrorApi, SesionExpirada
 from app.datos import ErrorNegocio, NoConectado
@@ -12,10 +14,7 @@ from app.datos import ErrorNegocio, NoConectado
 # Ruta que falta en el middleware para cada operación todavía no conectada.
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
-    "cajas_disponibles": "/pos/cajas", "datos_ultimo_corte": "/pos/cortes", "abrir_caja": "/pos/cajas/abrir",
-    "resumen_corte": "/pos/cortes", "cerrar_caja": "/pos/cortes", "clientes_credito_pos": "/finanzas/clientes-credito",
-    "buscar_ticket": "/pos/ventas/{folio}", "administradores": "/pos/devoluciones",
-    "autorizar": "/pos/devoluciones", "procesar_devolucion": "/pos/devoluciones",
+    "clientes_credito_pos": "/finanzas/clientes-credito",
     "lista_proveedores": "/compras/proveedores", "proveedores_activos": "/compras/proveedores",
     "guardar_proveedor": "/compras/proveedores", "siguiente_folio_lote": "/compras/lotes",
     "registrar_lote": "/compras/lotes", "lista_lotes": "/compras/lotes", "detalle_lote": "/compras/lotes/{folio}",
@@ -46,8 +45,23 @@ _RUTAS_PENDIENTES = {
 }
 
 
+# Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
+REEMBOLSOS = {"Efectivo (sale de la caja)": "efectivo", "Reverso a tarjeta": "tarjeta",
+              "Transferencia": "transferencia", "Abono a crédito": "credito"}
+FALTAN_OBSERVACIONES = "Escriba las observaciones"
+
+
 def _dec(v) -> Decimal:
     return Decimal(str(v)) if v is not None else Decimal("0")
+
+
+def _concepto_venta(v: dict) -> str:
+    nombre = v["metodo"].lower()
+    if v["es_efectivo"]:
+        return "Ventas en efectivo"
+    if v["es_credito"]:
+        return "Ventas a crédito"
+    return f"Ventas con {nombre}" if nombre.startswith("tarjeta") else f"Ventas por {nombre}"
 
 
 class DatosApi:
@@ -59,6 +73,10 @@ class DatosApi:
         self.ultimo_ticket: dict | None = None
         self.peso_simulado = Decimal("0.800")
         self._caja: dict | None = None
+        self._caja_corte: int | None = None
+        self._administradores: dict[str, str] = {}
+        # (folio del ticket, autorización firmada) que dio el Administrador para ese ticket.
+        self._autorizacion: tuple[str, str] | None = None
 
     def __getattr__(self, nombre: str):
         if nombre in _RUTAS_PENDIENTES:
@@ -105,10 +123,14 @@ class DatosApi:
             if exc.status in (403, 404):
                 return None
             raise ErrorNegocio(exc.mensaje) from exc
-        self._caja = dict(id_caja=c["id_caja"], nombre=f"Caja {c['id_caja']}", terminal=c["terminal"],
-                          fondo_inicial=_dec(c["fondo_inicial"]),
-                          fecha_apertura=datetime.fromisoformat(c["fecha_apertura"]), cajero=None)
+        self._caja = self._caja_de(c)
         return self._caja
+
+    @staticmethod
+    def _caja_de(c: dict) -> dict:
+        return dict(id_caja=c["id_caja"], nombre=f"Caja {c['id_caja']}", terminal=c["terminal"],
+                    fondo_inicial=_dec(c["fondo_inicial"]),
+                    fecha_apertura=datetime.fromisoformat(c["fecha_apertura"]), cajero=None)
 
     def productos_pos(self, busqueda: str | None = None, codigo: str | None = None, frecuentes: bool = False) -> list[dict]:
         filas = self._llamar(self.api.get, "/pos/productos", busqueda=busqueda, codigo=codigo,
@@ -134,3 +156,108 @@ class DatosApi:
 
     def ticket_ultimo(self) -> dict | None:
         return self.ultimo_ticket
+
+    # ---------------------------------------------------------- apertura y corte (HU-15, HU-09)
+    def cajas_disponibles(self) -> list[dict]:
+        # La caja es la terminal donde corre la aplicación (FRUTIS_TERMINAL).
+        return [dict(id_caja=self.terminal, nombre=f"Terminal {self.terminal}")]
+
+    def datos_ultimo_corte(self, terminal: str) -> dict | None:
+        try:
+            c = self.api.get("/pos/cortes/ultimo", terminal=terminal or self.terminal)
+        except SesionExpirada:
+            raise
+        except ErrorApi as exc:
+            if exc.status == 404:
+                return None
+            raise ErrorNegocio(exc.mensaje) from exc
+        return dict(fecha=datetime.fromisoformat(c["fecha_cierre"]), cajero=c["cajero"],
+                    esperado=_dec(c["efectivo_esperado"]), contado=_dec(c["efectivo_contado"]),
+                    observaciones=c["observaciones"] or "Sin observaciones")
+
+    def abrir_caja(self, terminal: str, fondo: Decimal) -> dict:
+        c = self._llamar(self.api.post, "/pos/cajas", dict(terminal=terminal or self.terminal, fondo_inicial=str(fondo)))
+        self._caja = self._caja_de(c)
+        return self._caja
+
+    def resumen_corte(self) -> dict | None:
+        try:
+            r = self.api.get("/pos/cortes/actual")
+        except SesionExpirada:
+            raise
+        except ErrorApi as exc:
+            if exc.status in (403, 404):
+                return None
+            raise ErrorNegocio(exc.mensaje) from exc
+        filas = [dict(concepto="Fondo inicial", tickets=None, importe=_dec(r["fondo_inicial"]))]
+        filas += [dict(concepto=_concepto_venta(v), tickets=v["tickets"], importe=_dec(v["importe"])) for v in r["ventas"]]
+        cobros, devoluciones = r["cobros_efectivo"], r["devoluciones_efectivo"]
+        if cobros["cantidad"]:
+            filas.append(dict(concepto="Cobros a clientes en efectivo", tickets=cobros["cantidad"],
+                              importe=_dec(cobros["importe"])))
+        filas.append(dict(concepto="Devoluciones en efectivo", tickets=devoluciones["cantidad"],
+                          importe=-_dec(devoluciones["importe"])))
+        self._caja_corte = r["id_caja"]
+        return dict(filas=filas, esperado=_dec(r["efectivo_esperado"]),
+                    desde=datetime.fromisoformat(r["fecha_apertura"]),
+                    tickets=sum(v["tickets"] for v in r["ventas"]), caja=f"Caja {r['id_caja']}")
+
+    def cerrar_caja(self, contado: Decimal, observaciones: str) -> dict:
+        id_caja = self._caja_corte or (self.caja_actual() or {}).get("id_caja")
+        if id_caja is None:
+            raise ErrorNegocio("No hay una caja abierta.")
+        cuerpo = dict(id_caja=id_caja, efectivo_contado=str(contado), observaciones=observaciones or None)
+        try:
+            r = self.api.post("/pos/cortes", cuerpo)
+        except SesionExpirada:
+            raise
+        except ErrorApi as exc:
+            if exc.status == 422 and any(str(e.get("campo", "")).endswith("observaciones") for e in exc.errores or []):
+                raise ErrorNegocio("Las observaciones no pueden llevar comillas, punto y coma ni los signos < >.",
+                                   campo="observaciones") from exc
+            campo = "observaciones" if exc.mensaje.startswith(FALTAN_OBSERVACIONES) else None
+            raise ErrorNegocio(exc.mensaje, campo=campo) from exc
+        self._caja = None
+        self._caja_corte = None
+        return dict(contado=_dec(r["efectivo_contado"]), diferencia=_dec(r["diferencia"]),
+                    esperado=_dec(r["efectivo_esperado"]))
+
+    # ---------------------------------------------------------- devoluciones (HU-30, SC-02)
+    def buscar_ticket(self, folio: str) -> dict:
+        t = self._llamar(self.api.get, f"/pos/ventas/{quote(folio.strip().upper(), safe='')}")
+        renglones = [dict(id_producto=r["id_producto"], nombre=r["nombre"], unidad=r["unidad_venta"],
+                          cantidad=_dec(r["cantidad"]), precio=_dec(r["precio_unitario"]), importe=_dec(r["importe"]),
+                          devuelto=_dec(r["devuelto"])) for r in t["renglones"]]
+        return dict(folio=t["folio"], fecha=datetime.fromisoformat(t["fecha"]), metodo=t["metodo"],
+                    es_credito=t["es_credito"], facturado=t["facturado"], total=_dec(t["total"]),
+                    renglones=renglones, cliente=t["cliente"])
+
+    def administradores(self) -> list[str]:
+        filas = self._llamar(self.api.get, "/pos/devoluciones/administradores")
+        self._administradores = {a["nombre_completo"]: a["usuario"] for a in filas}
+        return list(self._administradores)
+
+    def autorizar(self, nombre_admin: str, password: str, folio: str | None = None) -> str:
+        if not folio:
+            raise ErrorNegocio("Busca primero el ticket que se va a devolver.")
+        usuario = self._administradores.get(nombre_admin)
+        if usuario is None:
+            raise ErrorNegocio("Elige un Administrador de la lista.")
+        r = self._llamar(self.api.post, "/pos/devoluciones/autorizacion",
+                         dict(usuario=usuario, password=password, folio_venta=folio))
+        self._autorizacion = (folio, r["autorizacion"])
+        return f"Autorizado por {r['autorizado_por']} a las {datetime.now():%H:%M}."
+
+    def procesar_devolucion(self, folio: str, renglones: list[dict], motivo: str, reembolso: str, admin: str) -> dict:
+        if self._autorizacion is None or self._autorizacion[0] != folio:
+            raise ErrorNegocio("Falta la autorización del Administrador para este ticket.")
+        caja = self._caja or self.caja_actual()
+        if caja is None:
+            raise ErrorNegocio("Abre la caja para registrar devoluciones.")
+        cuerpo = dict(id_caja=caja["id_caja"], folio_venta=folio, motivo=motivo,
+                      reembolso=REEMBOLSOS.get(reembolso, reembolso), autorizacion=self._autorizacion[1],
+                      renglones=[dict(id_producto=r["id_producto"], cantidad=str(r["cantidad"]),
+                                      estado="bueno" if r["buen_estado"] else "danado") for r in renglones])
+        r = self._llamar(self.api.post, "/pos/devoluciones", cuerpo)
+        self._autorizacion = None
+        return dict(total=_dec(r["total"]), folio=r["folio"])
