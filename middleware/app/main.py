@@ -11,7 +11,7 @@ from app.errores import ErrorNegocio
 
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="Frutis ERP + POS", version="0.1.0")
+app = FastAPI(title="Frutis ERP + POS", version="1.0.0")
 app.include_router(auth.router)
 app.include_router(pos.router)
 app.include_router(inventario.router)

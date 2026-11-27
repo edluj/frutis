@@ -4,6 +4,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+## [1.0.0] - 2026-11-27
+
+Entrega del proyecto (LB-5) con el alcance de SC-05 (#19): sin báscula ni impresora reales, timbrado con PAC simulado. Ejecutables `Frutis.exe` (Windows) y `Frutis` (Linux) en el Release de GitHub.
+
 ### Agregado
 - Ejecutable de la aplicación (HU-13, EC-14): `frontend/frutis.spec` con PyInstaller; el workflow **Frontend** corre las 76 pruebas del frontend y construye `Frutis.exe` (Windows) y `Frutis` (Linux) como artefactos. Antes de subirlos, `--verificar` abre las 34 pantallas dentro del ejecutable.
 - Configuración de cada terminal en `frutis.ini` junto al ejecutable (`frontend/frutis.ini.example`) y mensaje claro cuando no se puede validar el certificado del servidor.
