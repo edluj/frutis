@@ -1,10 +1,11 @@
-"""Datos que vienen del middleware. Hoy existen /auth, /pos y parte de /inventario
-(middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías y productos.
+"""Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
+/compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
+productos, proveedores y lotes de compra.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
 """
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import quote
 
@@ -15,9 +16,6 @@ from app.datos import ErrorNegocio, NoConectado
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
     "clientes_credito_pos": "/finanzas/clientes-credito",
-    "lista_proveedores": "/compras/proveedores", "proveedores_activos": "/compras/proveedores",
-    "guardar_proveedor": "/compras/proveedores", "siguiente_folio_lote": "/compras/lotes",
-    "registrar_lote": "/compras/lotes", "lista_lotes": "/compras/lotes", "detalle_lote": "/compras/lotes/{folio}",
     "cuentas_por_pagar": "/compras/cuentas-por-pagar", "pagar_lote": "/compras/cuentas-por-pagar",
     "estado_cuenta_proveedor": "/compras/proveedores/{id}/estado-de-cuenta",
     "timbres_disponibles": "/facturacion", "ticket_para_factura": "/facturacion",
@@ -45,6 +43,25 @@ _RUTAS_PENDIENTES = {
 # Filtro "Existencia" de productos (CAT-02) -> valor del middleware, y color de cada estado.
 FILTRO_EXISTENCIA = {"Todas": "todas", "Bajo el mínimo": "bajo", "Por caducar": "por_caducar"}
 TONO_ESTADO = {"Normal": "verde", "Bajo": "rojo", "Sin existencia": "rojo", "Por caducar": "naranja"}
+
+
+# Estatus del proveedor (PRV-01) y motivos de merma de la base -> texto de pantalla.
+ESTATUS_PROVEEDOR = {"Activos": "activos", "Inactivos": "inactivos", "Todos": "todos"}
+MOTIVOS_MERMA = {"maduracion": "Maduración", "golpe": "Golpe", "caducidad": "Caducidad",
+                 "devolucion": "Devolución en mal estado", "otro": "Otro"}
+TONO_PAGO = {"Pagado": "verde", "Vencido": "rojo", "Pendiente": "naranja"}
+
+
+def _estatus_cxp(saldo: Decimal, vence: date | None) -> tuple[str, str]:
+    """Mismo texto que el modo demostración para la cuenta por pagar de un lote."""
+    if saldo <= 0 or vence is None:
+        return "Pagado", "verde"
+    dias = (vence - date.today()).days
+    if dias < 0:
+        return f"Vencida · {-dias} días", "rojo"
+    if dias <= 3:
+        return (f"Vence en {dias} días" if dias != 1 else "Vence mañana"), "naranja"
+    return "Pendiente", "gris"
 
 
 # Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
@@ -312,3 +329,75 @@ class DatosApi:
             self._llamar(self.api.put, f"/inventario/productos/{datos['id_producto']}", cuerpo)
         else:
             self._llamar(self.api.post, "/inventario/productos", cuerpo)
+
+    # ---------------------------------------------------------- compras (HU-23, HU-11)
+    @staticmethod
+    def _proveedor_de(p: dict) -> dict:
+        return dict(p, id=p["id_proveedor"], correo=p["correo"] or "", direccion=p["direccion"] or "",
+                    saldo=_dec(p["saldo"]))
+
+    def lista_proveedores(self, busqueda: str = "", estatus: str = "Activos") -> list[dict]:
+        filas = self._llamar(self.api.get, "/compras/proveedores", busqueda=busqueda or None,
+                             estatus=ESTATUS_PROVEEDOR.get(estatus, "activos"))
+        return [self._proveedor_de(p) for p in filas]
+
+    def proveedores_activos(self) -> list[dict]:
+        return self.lista_proveedores()
+
+    def guardar_proveedor(self, datos: dict) -> bool:
+        cuerpo = dict(razon_social=datos["razon_social"], rfc=datos["rfc"], telefono=datos["telefono"],
+                      correo=datos.get("correo") or None, direccion=datos.get("direccion") or None,
+                      dias_credito=datos["dias_credito"], activo=datos.get("activo", True))
+        if datos.get("id"):
+            self._llamar(self.api.put, f"/compras/proveedores/{datos['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/compras/proveedores", cuerpo)
+        return True
+
+    def siguiente_folio_lote(self) -> str:
+        return self._llamar(self.api.get, "/compras/lotes/siguiente-folio")["folio"]
+
+    def registrar_lote(self, datos: dict) -> str:
+        cuerpo = dict(id_proveedor=datos["id_proveedor"], factura=datos.get("factura") or None,
+                      entrada=datos["entrada"].isoformat(), dias_credito=datos["dias"] or 0,
+                      renglones=[dict(id_producto=r["id_producto"], cantidad=str(r["cantidad"]), costo=str(r["costo"]),
+                                      caducidad=r["caducidad"].isoformat()) for r in datos["renglones"]])
+        return self._llamar(self.api.post, "/compras/lotes", cuerpo)["folio"]
+
+    def lista_lotes(self, id_proveedor=None, desde=None, hasta=None, pago="Todos") -> dict:
+        filas = []
+        for f in self._llamar(self.api.get, "/compras/lotes", id_proveedor=id_proveedor,
+                              desde=desde.isoformat() if desde else None, hasta=hasta.isoformat() if hasta else None,
+                              pago=pago):
+            dias = f["dias_credito"]
+            filas.append(dict(folio=f["folio"], proveedor=f["proveedor"], entrada=date.fromisoformat(f["entrada"]),
+                              productos=f["productos"], total=_dec(f["total"]), kilos=_dec(f["kilos"]),
+                              condicion="Contado" if dias == 0 else f"Crédito {dias} días", pago=f["pago"],
+                              tono=TONO_PAGO[f["pago"]], saldo=_dec(f["saldo"]),
+                              caducidad=date.fromisoformat(f["caducidad"])))
+        total = sum((f["total"] for f in filas), Decimal("0"))
+        kilos = sum((f["kilos"] for f in filas), Decimal("0"))
+        pendientes = [f for f in filas if f["pago"] != "Pagado"]
+        return dict(filas=filas, total=total, kilos=kilos, proveedores=len({f["proveedor"] for f in filas}),
+                    costo_promedio=(total / kilos if kilos else Decimal("0")), pendientes=len(pendientes),
+                    por_pagar=sum((f["saldo"] for f in pendientes), Decimal("0")))
+
+    def detalle_lote(self, folio: str) -> dict:
+        d = self._llamar(self.api.get, f"/compras/lotes/{quote(folio)}")
+        productos = [dict(r, unidad=r["unidad_venta"], recibido=_dec(r["recibido"]), costo=_dec(r["costo"]),
+                          vendido=_dec(r["vendido"]), merma=_dec(r["merma"]), existencia=_dec(r["existencia"]),
+                          caducidad=date.fromisoformat(r["caducidad"])) for r in d["productos"]]
+        mermas = [dict(fecha=date.fromisoformat(m["fecha"]), producto=m["producto"], cantidad=_dec(m["cantidad"]),
+                       motivo=MOTIVOS_MERMA.get(m["motivo"], m["motivo"]), costo=_dec(m["costo"])) for m in d["mermas"]]
+        entrada = date.fromisoformat(d["entrada"])
+        vence = date.fromisoformat(d["vence"]) if d["vence"] else None
+        saldo = _dec(d["saldo"])
+        estatus, tono = _estatus_cxp(saldo, vence)
+        return dict(folio=d["folio"], proveedor=d["proveedor"], entrada=entrada, factura=d["factura"] or "",
+                    total=_dec(d["total"]), dias=d["dias_credito"], vence=vence or entrada,
+                    recibido=sum((p["recibido"] for p in productos), Decimal("0")),
+                    vendido=sum((p["vendido"] for p in productos), Decimal("0")),
+                    merma=sum((p["merma"] for p in productos), Decimal("0")),
+                    costo_merma=sum((m["costo"] for m in mermas), Decimal("0")),
+                    productos=productos, mermas=mermas, pagado=_dec(d["pagado"]), saldo=saldo,
+                    estatus=estatus, tono=tono)

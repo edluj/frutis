@@ -51,6 +51,7 @@ Los nombres van en minúsculas para que el esquema funcione igual en Windows y L
 - **Un ticket solo tiene una factura vigente.** Una factura cancelada libera el ticket para la factura sustituta.
 - **La bitácora `auditoria` es de solo lectura:** triggers rechazan `UPDATE` y `DELETE`.
 - **Los precios incluyen IVA.** El procedimiento desglosa el IVA según la tasa de cada producto (0 % o 16 %).
+- **Proveedores y lotes guardan los datos de la pantalla** (`proveedores.direccion`, `lotes_compras.factura_proveedor`). Bases ya instaladas: `migraciones/003_compras_direccion_factura.sql`.
 - **Las devoluciones guardan su forma de reembolso** (`devoluciones.reembolso`). Solo las de efectivo se restan del corte. Bases ya instaladas: `migraciones/002_devoluciones_reembolso.sql` y después la función y los 3 procedimientos nuevos.
 - **Una devolución reparte la cantidad entre los lotes** de los que salió la venta: lo que está en buen estado regresa a ese lote y lo dañado se registra como merma del lote, al costo con el que se compró.
 

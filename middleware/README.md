@@ -48,6 +48,12 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `POST /inventario/categorias`, `PUT /inventario/categorias/{id}` | `inventario` crear / editar | Nombre único; no se da de baja una categoría con productos activos (HU-22) |
 | `GET /inventario/productos` | `inventario` ver | Filtros `busqueda` (nombre o código), `id_categoria` y `existencia` (`todas`, `bajo`, `por_caducar`); trae existencia por lotes y estado |
 | `POST /inventario/productos`, `PUT /inventario/productos/{id}` | `inventario` crear / editar | Código de barras único, precio mayor a 0, baja lógica; cada cambio de precio queda en `historial_precios` (HU-10) |
+| `GET /compras/proveedores` | `compras` ver | Filtros `busqueda` (razón social o RFC) y `estatus` (`activos`, `inactivos`, `todos`); incluye el saldo por pagar |
+| `POST /compras/proveedores`, `PUT /compras/proveedores/{id}` | `compras` crear / editar | RFC único de 12 o 13 caracteres, correo válido; no se da de baja con saldo por pagar (HU-23) |
+| `GET /compras/lotes` | `compras` ver | Filtros `id_proveedor`, `desde`, `hasta` y `pago` (`Pagado`, `Pendiente`, `Vencido`) |
+| `GET /compras/lotes/siguiente-folio` | `compras` crear | Folio que probablemente tendrá el próximo lote |
+| `GET /compras/lotes/{folio}` | `compras` ver | Productos con recibido, vendido, merma y existencia; mermas y cuenta por pagar |
+| `POST /compras/lotes` | `compras` crear | En una transacción: lote, existencia por producto, costo vigente y, si `dias_credito` > 0, la cuenta por pagar (HU-11) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 
