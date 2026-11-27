@@ -15,6 +15,8 @@ from app.schemas.pos import (
 )
 from app.security.dependencias import UsuarioActual, requiere
 from app.security.sanitizar import PATRON_TEXTO_SEGURO
+from app.schemas.finanzas import ClienteCreditoPos
+from app.services import finanzas as servicio_finanzas
 from app.services import pos as servicio
 
 router = APIRouter(prefix="/pos", tags=["pos"])
@@ -33,6 +35,13 @@ def productos(
 @router.get("/metodos-pago", response_model=list[MetodoPago], dependencies=[Depends(requiere("pos", "ver"))])
 def metodos_pago(conn: Connection = Depends(get_conn)):
     return repositorio.metodos_pago(conn)
+
+
+@router.get("/clientes-credito", response_model=list[ClienteCreditoPos],
+            dependencies=[Depends(requiere("pos", "crear"))])
+def clientes_credito(conn: Connection = Depends(get_conn)):
+    """Clientes activos con su disponible, para vender a crédito (HU-38a)."""
+    return servicio_finanzas.clientes_para_pos(conn)
 
 
 # ---------------------------------------------------------------- caja (HU-15)
