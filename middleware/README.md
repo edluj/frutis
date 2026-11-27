@@ -91,6 +91,9 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /facturacion/facturas`, `GET /facturacion/facturas/{folio}` | `facturacion` ver | Filtros `texto` (folio, RFC o razón social), `desde`, `hasta` y `estatus` |
 | `GET /facturacion/facturas/{folio}/xml` | `facturacion` ver | Descarga del XML timbrado |
 | `POST /facturacion/facturas/{folio}/cancelacion` | `facturacion` editar | Motivo SAT 01 a 04; el 01 exige el folio de una factura vigente que la sustituye (HU-33) |
+| `GET /reportes/resumen-del-dia` | Sesión | Resumen de la pantalla de inicio; cada parte (caducidades, por cobrar, alertas) solo si el rol puede ver ese módulo |
+| `GET /reportes/cajeros` | `reportes` ver | Usuarios activos que pueden cobrar y quien ya cobró |
+| `GET /reportes/{1..12}` | `reportes` ver | `desde`, `hasta` y `cajero`; columnas con su tipo (`texto`, `entero`, `dinero`, `fecha`, `porcentaje`), filas, total y barras (HU-28, HU-29) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 

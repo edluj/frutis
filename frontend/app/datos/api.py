@@ -1,7 +1,5 @@
-"""Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
-/compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, mermas, proveedores, lotes de compra, clientes de crédito, usuarios y facturación
-(con el PAC simulado de SC-05).
+"""Datos que vienen del middleware (rutas en middleware/README.md): todas las pantallas están
+conectadas. La facturación usa el PAC simulado de SC-05.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -13,12 +11,10 @@ from urllib.parse import quote
 from app import formato
 from app.api_client import ApiClient, ErrorApi, SesionExpirada
 from app.datos import ErrorNegocio, NoConectado
+from app.datos.reportes_demo import COLORES as COLORES_REPORTE
 
-# Ruta que falta en el middleware para cada operación todavía no conectada.
-_RUTAS_PENDIENTES = {
-    "resumen_inicio": "/reportes/resumen-del-dia",
-    "cajeros": "/reportes", "reporte": "/reportes",
-}
+# Ruta que falta en el middleware para cada operación todavía no conectada (hoy ninguna).
+_RUTAS_PENDIENTES: dict[str, str] = {}
 
 
 # Filtro "Existencia" de productos (CAT-02) -> valor del middleware, y color de cada estado.
@@ -767,6 +763,50 @@ class DatosApi:
 
     def guardar_dispositivos(self, datos: dict) -> None:
         raise ErrorNegocio(SIN_DISPOSITIVOS)
+
+    # ---------------------------------------------------------- reportes e inicio (HU-28, HU-29)
+    def resumen_inicio(self) -> dict:
+        r = self._llamar(self.api.get, "/reportes/resumen-del-dia")
+        ventas = _dec(r["ventas_hoy"])
+        return dict(ventas_hoy=ventas, tickets=r["tickets"], ticket_promedio=ventas / r["tickets"] if r["tickets"] else Decimal("0"),
+                    caja=dict(abierta=r["caja_abierta"], detalle=r["caja_detalle"]),
+                    # Sin permiso para ese módulo el servidor no manda el dato.
+                    caducar="—" if r["caducar"] is None else r["caducar"], caducar_detalle=r["caducar_detalle"],
+                    por_cobrar=_dec(r["por_cobrar"]), por_cobrar_detalle=r["por_cobrar_detalle"],
+                    alertas=[(a["etiqueta"], a["texto"], a["tono"]) for a in r["alertas"]])
+
+    def cajeros(self) -> list[str]:
+        return self._llamar(self.api.get, "/reportes/cajeros")
+
+    def reporte(self, numero: int, desde: date, hasta: date, cajero: str) -> dict:
+        r = self._llamar(self.api.get, f"/reportes/{numero}", desde=desde.isoformat(), hasta=hasta.isoformat(),
+                         cajero=None if cajero == "Todos" else cajero)
+        tipos = [c["tipo"] for c in r["columnas"]]
+
+        def celda(valor, tipo: str) -> str:
+            if valor is None or valor == "":
+                return ""
+            if tipo == "dinero":
+                return formato.dinero(_dec(valor))
+            if tipo == "porcentaje":
+                return formato.porcentaje(_dec(valor))
+            if tipo == "fecha":
+                try:
+                    return formato.fecha(date.fromisoformat(valor))
+                except ValueError:  # la etiqueta "Total" en una columna de fechas
+                    return str(valor)
+            if tipo == "entero":
+                return f"{int(valor):,}"
+            return str(valor)
+
+        textos = {"dinero": lambda v: formato.dinero(_dec(v)), "porcentaje": lambda v: formato.porcentaje(_dec(v)),
+                  "tickets": lambda v: f"{int(_dec(v))} tickets"}
+        return dict(
+            titulo=r["titulo"], columnas=[(c["nombre"], c["alineacion"]) for c in r["columnas"]],
+            filas=[[celda(v, t) for v, t in zip(fila, tipos)] for fila in r["filas"]],
+            total=[celda(v, t) for v, t in zip(r["total"], tipos)] if r["total"] else None,
+            barras=[(b["nombre"], b["fraccion"], textos[b["tipo"]](b["valor"]), COLORES_REPORTE[i % len(COLORES_REPORTE)])
+                    for i, b in enumerate(r["barras"])])
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod
