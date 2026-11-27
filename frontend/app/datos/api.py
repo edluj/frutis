@@ -16,8 +16,6 @@ from app.datos import ErrorNegocio, NoConectado
 # Ruta que falta en el middleware para cada operación todavía no conectada.
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
-    "cuentas_por_pagar": "/compras/cuentas-por-pagar", "pagar_lote": "/compras/cuentas-por-pagar",
-    "estado_cuenta_proveedor": "/compras/proveedores/{id}/estado-de-cuenta",
     "dashboard": "/finanzas/dashboard", "lista_gastos": "/finanzas/gastos", "registrar_gasto": "/finanzas/gastos",
     "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
@@ -443,6 +441,49 @@ class DatosApi:
             id_producto=id_producto, folio_lote=lote, cantidad=str(cantidad),
             motivo=MOTIVO_DE_PANTALLA.get(motivo, "otro"), observaciones=obs or None))
         return _dec(r["costo"])
+
+    # ---------------------------------------------------------- cuentas por pagar (HU-25)
+    def cuentas_por_pagar(self, id_proveedor=None, estatus="Pendientes y vencidas") -> dict:
+        filas = []
+        for c in self._llamar(self.api.get, "/compras/cuentas-por-pagar", id_proveedor=id_proveedor):
+            total, saldo, vence = _dec(c["total"]), _dec(c["saldo"]), date.fromisoformat(c["vence"])
+            est, tono = _estatus_cxp(saldo, vence)
+            if estatus == "Pendientes y vencidas" and saldo <= 0 or estatus == "Vencidas" and not est.startswith("Vencida"):
+                continue
+            if estatus == "Pagadas" and saldo > 0:
+                continue
+            filas.append(dict(lote=c["lote"], proveedor=c["proveedor"], vence=vence, total=total, saldo=saldo,
+                              estatus=est, tono=tono))
+        abiertas = [f for f in filas if f["saldo"] > 0]
+        vencidas = [f for f in abiertas if f["estatus"].startswith("Vencida")]
+        proximas = [f for f in abiertas if f["estatus"].startswith("Vence")]
+        return dict(filas=filas, total=sum((f["saldo"] for f in abiertas), Decimal("0")), lotes=len(abiertas),
+                    proveedores=len({f["proveedor"] for f in abiertas}),
+                    vencido=sum((f["saldo"] for f in vencidas), Decimal("0")), vencidas=vencidas,
+                    proximo=sum((f["saldo"] for f in proximas), Decimal("0")), proximas=proximas)
+
+    def pagar_lote(self, folio: str, monto: Decimal, metodo: str, referencia: str) -> Decimal:
+        r = self._llamar(self.api.post, f"/compras/cuentas-por-pagar/{quote(folio)}/pagos",
+                         dict(monto=str(monto), metodo=metodo, referencia=referencia or None))
+        return _dec(r["saldo"])
+
+    def estado_cuenta_proveedor(self, id_proveedor: int, desde: date, hasta: date) -> dict:
+        prov = next(p for p in self.lista_proveedores("", "Todos") if p["id"] == id_proveedor)
+        movs = [dict(fecha=date.fromisoformat(m["fecha"]), movimiento=m["movimiento"], referencia=m["referencia"],
+                     cargo=_dec(m["cargo"]), abono=_dec(m["abono"]))
+                for m in self._llamar(self.api.get, f"/compras/proveedores/{id_proveedor}/estado-de-cuenta")]
+        inicial = sum((m["cargo"] - m["abono"] for m in movs if m["fecha"] < desde), Decimal("0"))
+        periodo = [m for m in movs if desde <= m["fecha"] <= hasta]
+        saldo = inicial
+        for m in periodo:
+            saldo += m["cargo"] - m["abono"]
+            m["saldo"] = saldo
+        vencido = sum((f["saldo"] for f in self.cuentas_por_pagar(id_proveedor)["vencidas"]), Decimal("0"))
+        return dict(proveedor=prov, inicial=inicial, movimientos=periodo,
+                    compras=sum((m["cargo"] for m in periodo), Decimal("0")),
+                    pagos=sum((m["abono"] for m in periodo), Decimal("0")),
+                    n_compras=sum(1 for m in periodo if m["cargo"]), n_pagos=sum(1 for m in periodo if m["abono"]),
+                    saldo=saldo, vencido=vencido)
 
     # ---------------------------------------------------------- crédito (HU-39, HU-38a)
     def clientes_credito_pos(self) -> list[dict]:

@@ -167,3 +167,48 @@ def test_detalle_de_lote_inexistente_404_y_folio_invalido_422(cliente, compras, 
     monkeypatch.setattr(repo, "lote", lambda c, f: None)
     assert cliente.get("/compras/lotes/L-00000099", headers=compras).status_code == 404
     assert cliente.get("/compras/lotes/1 OR 1=1", headers=compras).status_code == 422
+
+
+# ---------------------------------------------------------------- cuentas por pagar (HU-25)
+
+PAGO = {"monto": "300.00", "metodo": "Cheque", "referencia": "Cheque 0042"}
+
+
+@pytest.fixture
+def cuenta(monkeypatch):
+    monkeypatch.setattr(repo, "cuenta_de_lote", lambda c, f: {"id_cxp": 1, "saldo": Decimal("516.50")} if f == "L-00000003" else None)
+    monkeypatch.setattr(repo, "id_metodo", lambda c, n: {"Transferencia": 4, "Efectivo": 1, "Cheque": 6}.get(n))
+    registrar = MagicMock()
+    monkeypatch.setattr(repo, "registrar_pago", registrar)
+    return registrar
+
+
+def test_pago_parcial_deja_el_saldo(cliente, compras, cuenta):
+    r = cliente.post("/compras/cuentas-por-pagar/L-00000003/pagos", json=PAGO, headers=compras)
+    assert r.status_code == 201 and r.json() == {"saldo": "216.50"}
+    assert cuenta.call_args.args[1:] == (1, "L-00000003", Decimal("300.00"), 6, "Cheque 0042", 3)
+    assert auditoria.registrar.call_args.args[2] == "pago_proveedor"
+
+
+def test_pago_mayor_al_saldo(cliente, compras, cuenta):
+    r = cliente.post("/compras/cuentas-por-pagar/L-00000003/pagos", json={**PAGO, "monto": "516.51"}, headers=compras)
+    assert r.status_code == 409 and r.json() == {"detail": "El pago no puede ser mayor al saldo.", "campo": "monto"}
+    cuenta.assert_not_called()
+
+
+def test_lote_de_contado_no_tiene_cuenta(cliente, compras, cuenta):
+    assert cliente.post("/compras/cuentas-por-pagar/L-00000004/pagos", json=PAGO, headers=compras).status_code == 404
+
+
+@pytest.mark.parametrize("cambio", [{"monto": "0"}, {"metodo": "Crédito"}, {"referencia": "<x>"}, {"monto": "-1"}])
+def test_pago_invalido_422(cliente, compras, cuenta, cambio):
+    assert cliente.post("/compras/cuentas-por-pagar/L-00000003/pagos", json={**PAGO, **cambio},
+                        headers=compras).status_code == 422
+
+
+def test_cajero_no_paga_proveedores(cliente, compras, cabeceras, cuenta):
+    assert cliente.post("/compras/cuentas-por-pagar/L-00000003/pagos", json=PAGO, headers=cabeceras).status_code == 403
+
+
+def test_estado_de_cuenta_de_proveedor_inexistente(cliente, compras):
+    assert cliente.get("/compras/proveedores/9/estado-de-cuenta", headers=compras).status_code == 404

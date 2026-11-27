@@ -6,9 +6,11 @@ from sqlalchemy import Connection
 
 from app.api.auth import ip_de
 from app.db import get_conn
+from app.errores import ErrorNegocio
 from app.repositories import compras as repositorio
 from app.schemas.compras import (
-    PATRON_FOLIO_LOTE, LoteDetalle, LoteEntrada, LoteRegistrado, LoteResumen, Proveedor, ProveedorEntrada,
+    PATRON_FOLIO_LOTE, CuentaPorPagar, LoteDetalle, LoteEntrada, LoteRegistrado, LoteResumen, MovimientoProveedor,
+    PagoEntrada, PagoRegistrado, Proveedor, ProveedorEntrada,
 )
 from app.security.dependencias import UsuarioActual, requiere
 from app.security.sanitizar import PATRON_TEXTO_SEGURO
@@ -83,3 +85,33 @@ def registrar_lote(
     conn: Connection = Depends(get_conn),
 ):
     return servicio.registrar_lote(conn, datos, usuario, ip_de(request))
+
+
+# ---------------------------------------------------------------- cuentas por pagar (HU-25)
+
+@router.get("/cuentas-por-pagar", response_model=list[CuentaPorPagar], dependencies=[Depends(requiere("compras", "ver"))])
+def cuentas_por_pagar(
+    id_proveedor: Annotated[int | None, Query(gt=0)] = None,
+    conn: Connection = Depends(get_conn),
+):
+    return repositorio.cuentas_por_pagar(conn, id_proveedor)
+
+
+@router.post("/cuentas-por-pagar/{folio}/pagos", response_model=PagoRegistrado, status_code=status.HTTP_201_CREATED)
+def pagar_lote(
+    folio: Annotated[str, Path(pattern=PATRON_FOLIO_LOTE)],
+    datos: PagoEntrada,
+    request: Request,
+    usuario: UsuarioActual = Depends(requiere("compras", "crear")),
+    conn: Connection = Depends(get_conn),
+):
+    return servicio.pagar_lote(conn, folio, datos, usuario, ip_de(request))
+
+
+@router.get("/proveedores/{id_proveedor}/estado-de-cuenta", response_model=list[MovimientoProveedor],
+            dependencies=[Depends(requiere("compras", "ver"))])
+def estado_de_cuenta(id_proveedor: Annotated[int, Path(gt=0)], conn: Connection = Depends(get_conn)):
+    """Toda la historia; la pantalla calcula el saldo inicial y el del periodo."""
+    if repositorio.proveedor(conn, id_proveedor) is None:
+        raise ErrorNegocio(404, "Proveedor no encontrado.")
+    return repositorio.movimientos_proveedor(conn, id_proveedor)

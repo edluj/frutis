@@ -52,6 +52,7 @@ Los nombres van en minúsculas para que el esquema funcione igual en Windows y L
 - **Un ticket solo tiene una factura vigente.** Una factura cancelada libera el ticket para la factura sustituta.
 - **La bitácora `auditoria` es de solo lectura:** triggers rechazan `UPDATE` y `DELETE`.
 - **Los precios incluyen IVA.** El procedimiento desglosa el IVA según la tasa de cada producto (0 % o 16 %).
+- **Método de pago "Cheque"**, inactivo: solo sirve para pagar a proveedores y no aparece en la caja. Bases ya instaladas: `migraciones/005_metodo_cheque.sql`.
 - **Las mermas admiten el motivo "Plaga u hongo"** (`plaga`), que ofrece la pantalla. Bases ya instaladas: `migraciones/004_mermas_motivo_plaga.sql`.
 - **Proveedores y lotes guardan los datos de la pantalla** (`proveedores.direccion`, `lotes_compras.factura_proveedor`). Bases ya instaladas: `migraciones/003_compras_direccion_factura.sql`.
 - **Las devoluciones guardan su forma de reembolso** (`devoluciones.reembolso`). Solo las de efectivo se restan del corte. Bases ya instaladas: `migraciones/002_devoluciones_reembolso.sql` y después la función y los 3 procedimientos nuevos.

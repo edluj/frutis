@@ -215,3 +215,90 @@ def mermas_de_lote(conn: Connection, id_lote: int) -> list[RowMapping]:
             {"lote": id_lote},
         ).mappings()
     )
+
+
+# ---------------------------------------------------------------- cuentas por pagar (HU-25)
+
+def cuentas_por_pagar(conn: Connection, id_proveedor: int | None) -> list[RowMapping]:
+    return list(
+        conn.execute(
+            text("""
+                SELECT l.folio AS lote, l.id_proveedor, pr.razon_social AS proveedor, c.fecha_vencimiento AS vence,
+                       c.monto_total AS total, c.saldo
+                FROM cuentas_por_pagar c
+                JOIN lotes_compras l ON l.id_lote = c.id_lote
+                JOIN proveedores pr ON pr.id_proveedor = l.id_proveedor
+                WHERE (:proveedor IS NULL OR l.id_proveedor = :proveedor)
+                ORDER BY c.fecha_vencimiento, l.folio
+            """),
+            {"proveedor": id_proveedor},
+        ).mappings()
+    )
+
+
+def cuenta_de_lote(conn: Connection, folio: str) -> RowMapping | None:
+    # FOR UPDATE: dos pagos al mismo lote no pueden pasarse del saldo.
+    return conn.execute(
+        text("""
+            SELECT c.id_cxp, c.saldo FROM cuentas_por_pagar c JOIN lotes_compras l ON l.id_lote = c.id_lote
+            WHERE l.folio = :folio FOR UPDATE
+        """),
+        {"folio": folio},
+    ).mappings().first()
+
+
+def id_metodo(conn: Connection, nombre: str) -> int | None:
+    # Incluye métodos inactivos para el POS, como Cheque.
+    return conn.execute(
+        text("SELECT id_metodo FROM metodos_pago WHERE nombre = :nombre AND es_credito = FALSE"), {"nombre": nombre}
+    ).scalar()
+
+
+def registrar_pago(conn: Connection, id_cxp: int, folio: str, monto: Decimal, id_metodo: int,
+                   referencia: str | None, id_usuario: int) -> None:
+    # La referencia va en el concepto: gastos_operativos no tiene otra columna para ella.
+    concepto = f"Pago lote {folio}" + (f" · {referencia}" if referencia else "")
+    conn.execute(
+        text("""
+            INSERT INTO gastos_operativos (tipo, concepto, monto, fecha, id_metodo, id_cxp, id_usuario)
+            VALUES ('pago_proveedor', :concepto, :monto, CURDATE(), :metodo, :cxp, :usuario)
+        """),
+        {"concepto": concepto[:120], "monto": monto, "metodo": id_metodo, "cxp": id_cxp, "usuario": id_usuario},
+    )
+    conn.execute(
+        text("""
+            UPDATE cuentas_por_pagar
+            SET saldo = saldo - :monto, estatus = IF(saldo = 0, 'pagada', 'pendiente')
+            WHERE id_cxp = :cxp
+        """),
+        {"monto": monto, "cxp": id_cxp},
+    )
+
+
+def movimientos_proveedor(conn: Connection, id_proveedor: int) -> list[RowMapping]:
+    """Compras (cargos) y pagos (abonos). Un lote de contado se paga al recibirlo: no tiene
+    cuenta por pagar y su abono es el mismo día."""
+    return list(
+        conn.execute(
+            text("""
+                SELECT l.fecha_entrada AS fecha, CONCAT('Compra lote ', l.folio) AS movimiento,
+                       CONCAT('Factura ', COALESCE(l.factura_proveedor, '—')) AS referencia,
+                       l.total AS cargo, 0 AS abono, 0 AS orden, l.id_lote AS id
+                FROM lotes_compras l WHERE l.id_proveedor = :proveedor
+                UNION ALL
+                SELECT l.fecha_entrada, CONCAT('Pago lote ', l.folio), 'Contado', 0, l.total, 1, l.id_lote
+                FROM lotes_compras l WHERE l.id_proveedor = :proveedor AND l.condicion_pago = 'contado'
+                UNION ALL
+                SELECT g.fecha, CONCAT('Pago lote ', l.folio),
+                       COALESCE(NULLIF(SUBSTRING_INDEX(g.concepto, ' · ', -1), g.concepto), m.nombre),
+                       0, g.monto, 1, g.id_gasto
+                FROM gastos_operativos g
+                JOIN cuentas_por_pagar c ON c.id_cxp = g.id_cxp
+                JOIN lotes_compras l ON l.id_lote = c.id_lote
+                JOIN metodos_pago m ON m.id_metodo = g.id_metodo
+                WHERE g.tipo = 'pago_proveedor' AND l.id_proveedor = :proveedor
+                ORDER BY fecha, orden, id
+            """),
+            {"proveedor": id_proveedor},
+        ).mappings()
+    )

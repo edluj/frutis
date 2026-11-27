@@ -37,12 +37,14 @@ INSERT INTO usuarios (id_usuario, nombre_completo, usuario, correo, password_has
   (3, 'Compras de prueba',       'compras1',  'compras1@frutis.test',  'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 3),
   (4, 'Contador de prueba',      'contador1', 'contador1@frutis.test', 'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 4);
 
-INSERT INTO metodos_pago (id_metodo, nombre, clave_sat, es_efectivo, es_credito) VALUES
-  (1, 'Efectivo',           '01', TRUE,  FALSE),
-  (2, 'Tarjeta de débito',  '28', FALSE, FALSE),
-  (3, 'Tarjeta de crédito', '04', FALSE, FALSE),
-  (4, 'Transferencia',      '03', FALSE, FALSE),
-  (5, 'Crédito',            '99', FALSE, TRUE);
+INSERT INTO metodos_pago (id_metodo, nombre, clave_sat, es_efectivo, es_credito, activo) VALUES
+  (1, 'Efectivo',           '01', TRUE,  FALSE, TRUE),
+  (2, 'Tarjeta de débito',  '28', FALSE, FALSE, TRUE),
+  (3, 'Tarjeta de crédito', '04', FALSE, FALSE, TRUE),
+  (4, 'Transferencia',      '03', FALSE, FALSE, TRUE),
+  (5, 'Crédito',            '99', FALSE, TRUE,  TRUE),
+  -- Solo para pagar a proveedores (HU-25): inactivo, no aparece en la caja del POS.
+  (6, 'Cheque',             '02', FALSE, FALSE, FALSE);
 
 INSERT INTO categorias (id_categoria, nombre, descripcion) VALUES
   (1, 'Frutas',   'Fruta fresca'),

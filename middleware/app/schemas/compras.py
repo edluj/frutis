@@ -124,3 +124,36 @@ class LoteDetalle(BaseModel):
     pago: Literal["Pagado", "Pendiente", "Vencido"]
     productos: list[RenglonDetalle]
     mermas: list[MermaDeLote]
+
+
+# ---------------------------------------------------------------- cuentas por pagar (HU-25)
+
+class CuentaPorPagar(BaseModel):
+    lote: str
+    id_proveedor: int
+    proveedor: str
+    vence: date
+    total: Decimal
+    saldo: Decimal
+
+
+class PagoEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    monto: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    metodo: Literal["Transferencia", "Efectivo", "Cheque"]
+    referencia: str | None = Field(default=None, max_length=60, pattern=PATRON_TEXTO_SEGURO)
+
+    _nulos = field_validator("referencia", mode="before")(_vacio_es_nulo)
+
+
+class PagoRegistrado(BaseModel):
+    saldo: Decimal
+
+
+class MovimientoProveedor(BaseModel):
+    fecha: date
+    movimiento: str
+    referencia: str
+    cargo: Decimal
+    abono: Decimal

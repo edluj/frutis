@@ -63,6 +63,9 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /compras/lotes/siguiente-folio` | `compras` crear | Folio que probablemente tendrá el próximo lote |
 | `GET /compras/lotes/{folio}` | `compras` ver | Productos con recibido, vendido, merma y existencia; mermas y cuenta por pagar |
 | `POST /compras/lotes` | `compras` crear | En una transacción: lote, existencia por producto, costo vigente y, si `dias_credito` > 0, la cuenta por pagar (HU-11) |
+| `GET /compras/cuentas-por-pagar` | `compras` ver | Cuentas de los lotes a crédito con su vencimiento y saldo; filtro `id_proveedor` |
+| `POST /compras/cuentas-por-pagar/{folio}/pagos` | `compras` crear | Abono con Transferencia, Efectivo o Cheque; no supera el saldo; queda como egreso en `gastos_operativos` (HU-25) |
+| `GET /compras/proveedores/{id}/estado-de-cuenta` | `compras` ver | Compras y pagos del proveedor; los lotes de contado se pagan el mismo día |
 | `GET /finanzas/clientes-credito` | `finanzas` ver | Filtros `busqueda` y `estatus` (`activos`, `suspendidos`, `todos`); lo que debe cada cliente y si tiene una cuenta vencida |
 | `POST /finanzas/clientes-credito`, `PUT /finanzas/clientes-credito/{id}` | `finanzas` crear / editar | Límite mayor a 0 y días de crédito obligatorios; un cliente suspendido no compra a crédito (HU-39) |
 | `GET /admin/roles` | `admin` ver | Roles activos |

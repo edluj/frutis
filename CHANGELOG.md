@@ -6,6 +6,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ### Agregado
 - Inventario completo (HU-24, HU-31): existencias con valor y días de alcance, lotes por caducar, movimientos por producto (entradas, ventas, mermas y devoluciones) y ajuste masivo de precios con historial.
+- Cuentas por pagar (HU-25): lista con vencimientos, abonos con Transferencia, Efectivo o Cheque que quedan como egreso, y estado de cuenta del proveedor. Método "Cheque" inactivo para el POS (`database/migraciones/005_metodo_cheque.sql`).
 
 ## [1.0.1] - 2026-11-27
 

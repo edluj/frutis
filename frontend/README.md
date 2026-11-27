@@ -78,7 +78,7 @@ Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario`, `/compras`, `
 | --- | --- | --- | --- |
 | Acceso | Login (ACC-01), Inicio y menú (ACC-02) | HU-04, HU-14, HU-21 | `/reportes/resumen-del-dia` para el resumen de inicio |
 | Punto de Venta | Apertura (POS-01), Cobro (POS-02), Corte (POS-03), Devolución (POS-04) | HU-06, 07a, 08, 09, 15, 16a, 30, 36, 38a | Ninguna: la venta a crédito ya usa `/pos/clientes-credito` |
-| Proveedores y Compras | Proveedores, Registrar lote, Lotes, Detalle de lote, Cuentas por pagar, Estado de cuenta (PRV-01 a 06) | HU-11, 23, 25 | Proveedores y lotes (PRV-01 a 04) ya conectados. Faltan `/compras/cuentas-por-pagar` y el estado de cuenta (HU-25) |
+| Proveedores y Compras | Proveedores, Registrar lote, Lotes, Detalle de lote, Cuentas por pagar, Estado de cuenta (PRV-01 a 06) | HU-11, 23, 25 | Ninguna: las 6 pantallas usan el servidor |
 | Facturación | Generar, Factura timbrada, Emitidas, Clientes fiscales (FAC-01 a 04) | HU-12a, 32, 33 | Ninguna: generar, factura timbrada, emitidas y clientes fiscales usan `/facturacion` con el PAC simulado. Falta el PDF y "Guardar borrador" sin timbrar |
 | Finanzas | Dashboard, Gastos, Flujo, Clientes de crédito, Cuentas por cobrar, Estado de cuenta (FIN-01 a 06) | HU-26, 27, 37, 38b, 39 | Clientes de crédito (FIN-04) ya conectados. Faltan `/finanzas/dashboard`, `/finanzas/gastos`, `/finanzas/flujo`, `/finanzas/cuentas-por-cobrar` y `/finanzas/cobros` |
 | Catálogo e Inventario | Categorías, Productos, Existencias, Lotes y caducidades, Movimientos, Ajuste e historial de precios, Mermas (CAT-01 a 08) | HU-10, 17, 22, 24, 31 | Ninguna: las 8 pantallas usan el servidor; la vista previa del ajuste de precios se calcula en la pantalla |

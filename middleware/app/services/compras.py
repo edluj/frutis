@@ -1,4 +1,4 @@
-"""Reglas de Compras: proveedores (HU-23) y lotes de compra (HU-11)."""
+"""Reglas de Compras: proveedores (HU-23), lotes de compra (HU-11) y cuentas por pagar (HU-25)."""
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -8,7 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from app.errores import ErrorNegocio
 from app.repositories import auditoria
 from app.repositories import compras as repositorio
-from app.schemas.compras import LoteDetalle, LoteEntrada, LoteRegistrado, Proveedor, ProveedorEntrada
+from app.schemas.compras import (
+    LoteDetalle, LoteEntrada, LoteRegistrado, PagoEntrada, PagoRegistrado, Proveedor, ProveedorEntrada,
+)
 from app.security.dependencias import UsuarioActual
 
 ER_DUP_ENTRY = 1062
@@ -97,3 +99,20 @@ def detalle_lote(conn: Connection, folio: str) -> LoteDetalle:
         productos=repositorio.renglones_de_lote(conn, lote["id_lote"]),
         mermas=repositorio.mermas_de_lote(conn, lote["id_lote"]),
     )
+
+
+def pagar_lote(conn: Connection, folio: str, datos: PagoEntrada, usuario: UsuarioActual, ip: str | None) -> PagoRegistrado:
+    """Abono a la cuenta por pagar de un lote; queda como egreso en gastos_operativos (HU-25)."""
+    cuenta = repositorio.cuenta_de_lote(conn, folio)
+    if cuenta is None:
+        raise ErrorNegocio(404, "Ese lote no tiene cuenta por pagar.")
+    if datos.monto > cuenta["saldo"]:
+        raise ErrorNegocio(409, "El pago no puede ser mayor al saldo.", "monto")
+    metodo = repositorio.id_metodo(conn, datos.metodo)
+    if metodo is None:
+        raise ErrorNegocio(409, "Método de pago no disponible.", "metodo")
+    repositorio.registrar_pago(conn, cuenta["id_cxp"], folio, datos.monto, metodo, datos.referencia, usuario.id_usuario)
+    saldo = cuenta["saldo"] - datos.monto
+    _auditar(conn, "pago_proveedor", f"{folio} · ${datos.monto} · {datos.metodo} · saldo ${saldo}", ip, usuario)
+    conn.commit()
+    return PagoRegistrado(saldo=saldo)
