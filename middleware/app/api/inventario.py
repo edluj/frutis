@@ -8,8 +8,8 @@ from app.api.auth import ip_de
 from app.db import get_conn
 from app.repositories import inventario as repositorio
 from app.schemas.inventario import (
-    Categoria, CategoriaEntrada, LoteConExistencia, Merma, MermaEntrada, MermaRegistrada, MotivoMerma,
-    ProductoCatalogo, ProductoEntrada,
+    AjusteAplicado, AjustePreciosEntrada, CambioPrecio, Categoria, CategoriaEntrada, Existencia, LoteConExistencia,
+    LotePorCaducar, Merma, MermaEntrada, MermaRegistrada, MotivoMerma, Movimiento, ProductoCatalogo, ProductoEntrada,
 )
 from app.security.dependencias import UsuarioActual, requiere
 from app.security.sanitizar import PATRON_TEXTO_SEGURO
@@ -114,3 +114,45 @@ def registrar_merma(
     conn: Connection = Depends(get_conn),
 ):
     return servicio.registrar_merma(conn, datos, usuario, ip_de(request))
+
+
+# ---------------------------------------------------------------- existencias, caducidades y movimientos (HU-24)
+
+@router.get("/existencias", response_model=list[Existencia], dependencies=[Depends(requiere("inventario", "ver"))])
+def existencias(conn: Connection = Depends(get_conn)):
+    return repositorio.existencias(conn)
+
+
+@router.get("/lotes", response_model=list[LotePorCaducar], dependencies=[Depends(requiere("inventario", "ver"))])
+def lotes_por_caducar(
+    dias: Annotated[int, Query(ge=0, le=365)] = 7,
+    id_producto: Annotated[int | None, Query(gt=0)] = None,
+    id_proveedor: Annotated[int | None, Query(gt=0)] = None,
+    conn: Connection = Depends(get_conn),
+):
+    """Lotes con existencia que caducan dentro de `dias` (o ya caducaron)."""
+    return repositorio.lotes_por_caducar(conn, dias, id_producto, id_proveedor)
+
+
+@router.get("/productos/{id_producto}/movimientos", response_model=list[Movimiento],
+            dependencies=[Depends(requiere("inventario", "ver"))])
+def movimientos(id_producto: Id, conn: Connection = Depends(get_conn)):
+    return repositorio.movimientos(conn, id_producto)
+
+
+# ---------------------------------------------------------------- precios (HU-31)
+
+@router.get("/productos/{id_producto}/precios", response_model=list[CambioPrecio],
+            dependencies=[Depends(requiere("inventario", "ver"))])
+def historial_precios(id_producto: Id, conn: Connection = Depends(get_conn)):
+    return repositorio.historial_precios(conn, id_producto)
+
+
+@router.post("/precios", response_model=AjusteAplicado)
+def ajustar_precios(
+    datos: AjustePreciosEntrada,
+    request: Request,
+    usuario: UsuarioActual = Depends(requiere("inventario", "editar")),
+    conn: Connection = Depends(get_conn),
+):
+    return servicio.ajustar_precios(conn, datos, usuario, ip_de(request))

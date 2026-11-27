@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+### Agregado
+- Inventario completo (HU-24, HU-31): existencias con valor y días de alcance, lotes por caducar, movimientos por producto (entradas, ventas, mermas y devoluciones) y ajuste masivo de precios con historial.
+
 ## [1.0.1] - 2026-11-27
 
 Recupera el instalador del servidor de base de datos del PR #8, que se integró en `fix/4-venta-a-credito` después de que esa rama entró a `develop` y no llegó a la versión 1.0.0.

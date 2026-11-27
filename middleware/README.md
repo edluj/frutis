@@ -52,6 +52,11 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /inventario/productos/{id}/lotes` | `inventario` ver | Lotes del producto con existencia, primero el que caduca antes |
 | `GET /inventario/mermas` | `inventario` ver | Filtros `motivo`, `desde` y `hasta` |
 | `POST /inventario/mermas` | `inventario` crear | Descuenta del lote y guarda el costo (cantidad × costo del lote); no puede superar la existencia del lote (HU-17) |
+| `GET /inventario/existencias` | `inventario` ver | Existencia, valor y lotes por producto, con la venta diaria promedio de 30 días (HU-24) |
+| `GET /inventario/lotes` | `inventario` ver | Lotes con existencia que caducan en `dias` (o ya caducaron); filtros `id_producto` e `id_proveedor` |
+| `GET /inventario/productos/{id}/movimientos` | `inventario` ver | Entradas, ventas por día y caja, mermas y devoluciones en buen estado |
+| `GET /inventario/productos/{id}/precios` | `inventario` ver | Historial de cambios de precio |
+| `POST /inventario/precios` | `inventario` editar | Ajuste de varios precios en una transacción; cada cambio va al historial con su motivo (HU-31) |
 | `GET /compras/proveedores` | `compras` ver | Filtros `busqueda` (razón social o RFC) y `estatus` (`activos`, `inactivos`, `todos`); incluye el saldo por pagar |
 | `POST /compras/proveedores`, `PUT /compras/proveedores/{id}` | `compras` crear / editar | RFC único de 12 o 13 caracteres, correo válido; no se da de baja con saldo por pagar (HU-23) |
 | `GET /compras/lotes` | `compras` ver | Filtros `id_proveedor`, `desde`, `hasta` y `pago` (`Pagado`, `Pendiente`, `Vencido`) |

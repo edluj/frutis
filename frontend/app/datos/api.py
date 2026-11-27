@@ -22,10 +22,6 @@ _RUTAS_PENDIENTES = {
     "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
     "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
-    "existencias": "/inventario/existencias",
-    "lotes_caducidad": "/inventario/lotes",
-    "movimientos": "/inventario/movimientos", "previsualizar_precios": "/inventario/precios",
-    "aplicar_precios": "/inventario/precios", "historial": "/inventario/precios/historial",
     "cajeros": "/reportes", "reporte": "/reportes",
     "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
     "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
@@ -329,6 +325,100 @@ class DatosApi:
             self._llamar(self.api.put, f"/inventario/productos/{datos['id_producto']}", cuerpo)
         else:
             self._llamar(self.api.post, "/inventario/productos", cuerpo)
+
+    # ---------------------------------------------------------- existencias y caducidades (HU-24)
+    def lotes_caducidad(self, id_producto=None, dias: int = 7, id_proveedor=None) -> list[dict]:
+        filas = self._llamar(self.api.get, "/inventario/lotes", dias=dias, id_producto=id_producto,
+                             id_proveedor=id_proveedor)
+        salida = []
+        for f in filas:
+            queda, unidad = _dec(f["queda"]), f["unidad_venta"]
+            salida.append(dict(caducidad=date.fromisoformat(f["caducidad"]), dias=f["dias"], producto=f["producto"],
+                               id_producto=f["id_producto"], lote=f["lote"], proveedor=f["proveedor"],
+                               recibido=_dec(f["recibido"]), queda=queda, unidad=unidad,
+                               queda_txt=f"{queda:.1f} kg" if unidad == "kg" else f"{queda:.0f} pza",
+                               costo=_dec(f["costo"]),
+                               tono="rojo" if f["dias"] <= 1 else "naranja" if f["dias"] <= 3 else "gris"))
+        return salida
+
+    def existencias(self, busqueda: str = "", id_categoria=None, mostrar: str = "Todos") -> dict:
+        todos = []
+        for f in self._llamar(self.api.get, "/inventario/existencias"):
+            ex, diaria, minimo = _dec(f["existencia"]), _dec(f["venta_diaria"]), _dec(f["stock_minimo"])
+            todos.append(dict(id_producto=f["id_producto"], id_categoria=f["id_categoria"], nombre=f["nombre"],
+                              unidad="kg" if f["unidad_venta"] == "kg" else "pza", existencia=ex, minimo=minimo,
+                              diaria=diaria, alcanza=(ex / diaria) if diaria else None, lotes=f["lotes"],
+                              valor=_dec(f["valor"]), bajo=ex < minimo))
+        filas = [f for f in todos
+                 if (not busqueda or busqueda.lower() in f["nombre"].lower())
+                 and (not id_categoria or f["id_categoria"] == id_categoria)
+                 and not (mostrar == "Bajo el mínimo" and not f["bajo"])
+                 and not (mostrar == "Sin existencia" and f["existencia"] > 0)]
+        return dict(filas=filas, valor=sum((f["valor"] for f in todos), Decimal("0")),
+                    con_mov=sum(1 for f in todos if f["lotes"]),
+                    bajos=[f for f in todos if f["bajo"] and f["existencia"] > 0],
+                    sin=[f for f in todos if f["existencia"] <= 0], caducar=len(self.lotes_caducidad(dias=3)))
+
+    def movimientos(self, id_producto: int, desde: date, hasta: date, tipo: str = "Todos") -> dict:
+        p = self.producto(id_producto)
+        movs = [dict(fecha=date.fromisoformat(m["fecha"]), tipo=m["tipo"], cantidad=_dec(m["cantidad"]),
+                     referencia=m["referencia"], usuario=m["usuario"],
+                     tono={"Entrada": "verde", "Merma": "naranja", "Devolución": "verde"}.get(m["tipo"], "gris"))
+                for m in self._llamar(self.api.get, f"/inventario/productos/{id_producto}/movimientos")]
+        saldo = p["existencia"]
+        for m in movs:  # llegan de hoy hacia atrás: existencia después de cada movimiento
+            m["existencia"] = saldo
+            saldo -= m["cantidad"]
+        visibles = [m for m in movs if desde <= m["fecha"] <= hasta and (tipo == "Todos" or m["tipo"] == tipo.rstrip("s"))]
+        entradas = sum((m["cantidad"] for m in visibles if m["tipo"] == "Entrada"), Decimal("0"))
+        ventas = -sum((m["cantidad"] for m in visibles if m["tipo"] == "Venta"), Decimal("0"))
+        mermas = -sum((m["cantidad"] for m in visibles if m["tipo"] == "Merma"), Decimal("0"))
+        return dict(producto=p, unidad=p["unidad_venta"], movimientos=visibles, entradas=entradas,
+                    lotes_entrada=sum(1 for m in visibles if m["tipo"] == "Entrada"),
+                    ventas=ventas, importe_ventas=(ventas * p["precio_venta"]).quantize(Decimal("0.01")),
+                    mermas=mermas, costo_mermas=(mermas * p["costo"]).quantize(Decimal("0.01")),
+                    pct_merma=(mermas / entradas * 100) if entradas else Decimal("0"),
+                    existencia=p["existencia"], minimo=p["stock_minimo"], bajo=p["existencia"] < p["stock_minimo"])
+
+    # ---------------------------------------------------------- precios (HU-31)
+    def previsualizar_precios(self, aplicar: str, id_categoria, id_producto, tipo: str, valor: Decimal) -> list[dict]:
+        """Solo cálculo sobre los precios y costos vigentes: no guarda nada."""
+        activos = [p for p in self.lista_productos() if p["activo"]]
+        if aplicar == "Una categoría":
+            prods = [p for p in activos if p["id_categoria"] == id_categoria]
+        elif aplicar == "Un producto":
+            prods = [p for p in activos if p["id_producto"] == id_producto]
+        else:
+            prods = activos
+        filas = []
+        for p in prods:
+            actual = p["precio_venta"]
+            if tipo == "Porcentaje de aumento":
+                nuevo = actual * (1 + valor / 100)
+            elif tipo == "Porcentaje de descuento":
+                nuevo = actual * (1 - valor / 100)
+            else:
+                nuevo = valor
+            nuevo = nuevo.quantize(Decimal("0.01"))
+            margen = ((nuevo - p["costo"]) / nuevo * 100) if nuevo else Decimal("0")
+            filas.append(dict(id_producto=p["id_producto"], nombre=p["nombre"], unidad=p["unidad_venta"], costo=p["costo"],
+                              actual=actual, nuevo=nuevo, margen=margen, perdida=nuevo < p["costo"]))
+        return filas
+
+    def aplicar_precios(self, filas: list[dict], motivo: str) -> None:
+        self._llamar(self.api.post, "/inventario/precios", dict(
+            motivo=motivo, cambios=[dict(id_producto=f["id_producto"], precio_nuevo=str(f["nuevo"])) for f in filas]))
+
+    def historial(self, id_producto: int) -> dict:
+        p = self.producto(id_producto)
+        cambios = [dict(fecha=datetime.fromisoformat(c["fecha"]), anterior=_dec(c["anterior"]), nuevo=_dec(c["nuevo"]),
+                        usuario=c["usuario"], motivo=c["motivo"] or "", costo=p["costo"])
+                   for c in self._llamar(self.api.get, f"/inventario/productos/{id_producto}/precios")]
+        # La base no guarda el costo de cada fecha: la gráfica usa el costo vigente.
+        puntos = [(f"{c['fecha'].day:02d} {MESES[c['fecha'].month - 1][:3].lower()}", c["nuevo"], p["costo"])
+                  for c in reversed(cambios)]
+        puntos.append(("Hoy", p["precio_venta"], p["costo"]))
+        return dict(producto=p, cambios=cambios, puntos=puntos)
 
     # ---------------------------------------------------------- mermas (HU-17)
     def lotes_de_producto(self, id_producto: int) -> list[dict]:
