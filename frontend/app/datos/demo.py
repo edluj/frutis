@@ -1147,7 +1147,7 @@ class DatosDemo:
             costo_u = next(r["costo"] for r in lote["renglones"] if r["id_producto"] == m["id_producto"])
             filas.append(dict(m, producto=p["nombre"], unidad=p["unidad_venta"], costo=(m["cantidad"] * costo_u).quantize(D("0.01"))))
         mes = [f for f in filas if f["fecha"].month == 10]
-        return dict(filas=filas, kilos_mes=sum((f["cantidad"] for f in mes if f["unidad"] == "kg"), D("0")),
+        return dict(filas=filas, mes="Octubre", kilos_mes=sum((f["cantidad"] for f in mes if f["unidad"] == "kg"), D("0")),
                     costo_mes=sum((f["costo"] for f in mes), D("0")))
 
     def registrar_merma(self, id_producto: int, lote: str, cantidad: D, motivo: str, obs: str) -> D:

@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 
@@ -67,3 +68,47 @@ class ProductoEntrada(BaseModel):
         if valor not in TASAS_IVA:
             raise ValueError("La tasa de IVA debe ser 0 o 0.16.")
         return valor
+
+
+# ---------------------------------------------------------------- mermas (HU-17)
+
+MotivoMerma = Literal["maduracion", "golpe", "plaga", "devolucion", "caducidad", "otro"]
+
+
+class LoteConExistencia(BaseModel):
+    folio: str
+    queda: Decimal
+    caducidad: date
+    costo: Decimal
+
+
+class Merma(BaseModel):
+    fecha: date
+    id_producto: int
+    producto: str
+    unidad_venta: str
+    lote: str
+    cantidad: Decimal
+    motivo: MotivoMerma
+    costo: Decimal
+    usuario: str
+    observaciones: str | None
+
+
+class MermaEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    id_producto: int = Field(gt=0)
+    folio_lote: str = Field(pattern=r"^L-\d{1,16}$")
+    cantidad: Decimal = Field(gt=0, max_digits=10, decimal_places=3)
+    motivo: MotivoMerma
+    observaciones: str | None = Field(default=None, max_length=255, pattern=PATRON_TEXTO_SEGURO)
+
+    @field_validator("observaciones", mode="before")
+    @classmethod
+    def vacias_son_nulas(cls, valor):
+        return valor or None
+
+
+class MermaRegistrada(BaseModel):
+    costo: Decimal
