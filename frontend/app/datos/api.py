@@ -1,5 +1,5 @@
-"""Datos que vienen del middleware. Hoy existen /auth y /pos (middleware/README.md):
-login, cobro, apertura, corte y devoluciones.
+"""Datos que vienen del middleware. Hoy existen /auth, /pos y parte de /inventario
+(middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías y productos.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -29,9 +29,7 @@ _RUTAS_PENDIENTES = {
     "guardar_cliente_credito": "/finanzas/clientes-credito", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
     "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
-    "lista_categorias": "/inventario/categorias", "categorias_activas": "/inventario/categorias",
-    "guardar_categoria": "/inventario/categorias", "lista_productos": "/inventario/productos",
-    "guardar_producto": "/inventario/productos", "existencias": "/inventario/existencias",
+    "existencias": "/inventario/existencias",
     "lotes_caducidad": "/inventario/lotes", "lotes_de_producto": "/inventario/lotes",
     "movimientos": "/inventario/movimientos", "previsualizar_precios": "/inventario/precios",
     "aplicar_precios": "/inventario/precios", "historial": "/inventario/precios/historial",
@@ -41,8 +39,12 @@ _RUTAS_PENDIENTES = {
     "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
     "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
     "activar_metodo": "/admin/metodos-pago", "guardar_dispositivos": "/admin/dispositivos",
-    "producto": "/inventario/productos",
 }
+
+
+# Filtro "Existencia" de productos (CAT-02) -> valor del middleware, y color de cada estado.
+FILTRO_EXISTENCIA = {"Todas": "todas", "Bajo el mínimo": "bajo", "Por caducar": "por_caducar"}
+TONO_ESTADO = {"Normal": "verde", "Bajo": "rojo", "Sin existencia": "rojo", "Por caducar": "naranja"}
 
 
 # Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
@@ -91,7 +93,7 @@ class DatosApi:
         except SesionExpirada:
             raise
         except ErrorApi as exc:
-            raise ErrorNegocio(exc.mensaje) from exc
+            raise ErrorNegocio(exc.mensaje, exc.campo) from exc
 
     # ---------------------------------------------------------- sesión
     def login(self, usuario: str, password: str) -> dict:
@@ -261,3 +263,52 @@ class DatosApi:
         r = self._llamar(self.api.post, "/pos/devoluciones", cuerpo)
         self._autorizacion = None
         return dict(total=_dec(r["total"]), folio=r["folio"])
+
+    # ---------------------------------------------------------- catálogo (HU-22, HU-10)
+    @staticmethod
+    def _categoria_de(c: dict) -> dict:
+        return dict(id=c["id_categoria"], nombre=c["nombre"], descripcion=c["descripcion"] or "",
+                    activa=c["activo"], productos=c["productos_activos"])
+
+    def lista_categorias(self, busqueda: str = "") -> list[dict]:
+        filas = self._llamar(self.api.get, "/inventario/categorias", busqueda=busqueda or None)
+        return [self._categoria_de(c) for c in filas]
+
+    def categorias_activas(self) -> list[dict]:
+        return [self._categoria_de(c) for c in self._llamar(self.api.get, "/inventario/categorias", activas=True)]
+
+    def guardar_categoria(self, datos: dict) -> None:
+        cuerpo = dict(nombre=datos["nombre"], descripcion=datos.get("descripcion") or None,
+                      activo=datos.get("activa", True))
+        if datos.get("id"):
+            self._llamar(self.api.put, f"/inventario/categorias/{datos['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/inventario/categorias", cuerpo)
+
+    @staticmethod
+    def _producto_de(p: dict) -> dict:
+        return dict(p, unidad_venta="kg" if p["unidad_venta"] == "kg" else "pza",
+                    precio_venta=_dec(p["precio_venta"]), costo=_dec(p["costo_actual"]),
+                    tasa_iva=_dec(p["tasa_iva"]), stock_minimo=_dec(p["stock_minimo"]),
+                    existencia=_dec(p["existencia"]), tono=TONO_ESTADO[p["estado"]])
+
+    def lista_productos(self, busqueda: str = "", id_categoria=None, existencia: str = "Todas") -> list[dict]:
+        filas = self._llamar(self.api.get, "/inventario/productos", busqueda=busqueda or None,
+                             id_categoria=id_categoria, existencia=FILTRO_EXISTENCIA.get(existencia, "todas"))
+        return [self._producto_de(p) for p in filas]
+
+    def producto(self, id_producto: int) -> dict:
+        return next(p for p in self.lista_productos() if p["id_producto"] == id_producto)
+
+    def guardar_producto(self, datos: dict) -> None:
+        cuerpo = dict(codigo_barras=datos["codigo_barras"], nombre=datos["nombre"], id_categoria=datos["id_categoria"],
+                      unidad_venta="kg" if datos["unidad_venta"] == "kg" else "pieza",
+                      precio_venta=str(datos["precio_venta"]), stock_minimo=str(datos["stock_minimo"]),
+                      activo=datos.get("activo", True))
+        if datos.get("id_producto"):
+            # Al editar se conservan los campos que la pantalla no muestra.
+            actual = self.producto(datos["id_producto"])
+            cuerpo.update(tasa_iva=str(actual["tasa_iva"]), es_frecuente=actual["es_frecuente"])
+            self._llamar(self.api.put, f"/inventario/productos/{datos['id_producto']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/inventario/productos", cuerpo)

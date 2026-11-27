@@ -44,11 +44,17 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /pos/devoluciones/administradores` | `pos` crear | Administradores activos que pueden autorizar |
 | `POST /pos/devoluciones/autorizacion` | `pos` crear | El Administrador escribe su contraseña; devuelve una autorización firmada |
 | `POST /pos/devoluciones` | `pos` crear | Devolución parcial o total con `sp_registrar_devolucion` (HU-30) |
+| `GET /inventario/categorias` | `inventario` ver | Filtros `busqueda` y `activas`; incluye los productos activos de cada una |
+| `POST /inventario/categorias`, `PUT /inventario/categorias/{id}` | `inventario` crear / editar | Nombre único; no se da de baja una categoría con productos activos (HU-22) |
+| `GET /inventario/productos` | `inventario` ver | Filtros `busqueda` (nombre o código), `id_categoria` y `existencia` (`todas`, `bajo`, `por_caducar`); trae existencia por lotes y estado |
+| `POST /inventario/productos`, `PUT /inventario/productos/{id}` | `inventario` crear / editar | Código de barras único, precio mayor a 0, baja lógica; cada cambio de precio queda en `historial_precios` (HU-10) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 
 **Reembolso.** Efectivo sale del cajón y se resta en el corte; una venta a crédito se reembolsa solo como abono a su cuenta; el reverso a tarjeta solo aplica a tickets pagados con tarjeta. Lo que está en buen estado regresa a su lote; lo que está en mal estado se registra como merma.
 
 **Mensajes del login (APR, flujo A).** Credenciales incorrectas o usuario inexistente: "Ingrese un usuario/contraseña correcta." Un usuario o rol inactivo recibe "Usuario inactivo, contacte al administrador." solo si la contraseña es correcta; con una contraseña incorrecta recibe el mensaje general, así el login no revela qué usuarios existen.
+
+**Errores por campo.** Cuando una regla se refiere a un dato del formulario, la respuesta trae también `campo` (por ejemplo `{"detail": "El código de barras ya está registrado.", "campo": "codigo"}`) para que la pantalla lo marque.
 
 Cada respuesta autenticada trae `X-Token-Renovado`: el cliente reemplaza su token con ese valor para que la sesión expire por inactividad.

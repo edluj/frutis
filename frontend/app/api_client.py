@@ -16,11 +16,13 @@ SIN_SERVIDOR = "No hay conexión con el servidor. Revise la red e intente de nue
 
 
 class ErrorApi(Exception):
-    def __init__(self, status: int, mensaje: str, errores: list | None = None):
+    def __init__(self, status: int, mensaje: str, errores: list | None = None, campo: str | None = None):
         super().__init__(mensaje)
         self.status = status
         self.mensaje = mensaje
         self.errores = errores or []
+        # Campo del formulario que el middleware señala en el error, si lo hay.
+        self.campo = campo
 
 
 class SesionExpirada(ErrorApi):
@@ -62,6 +64,9 @@ class ApiClient:
     def post(self, ruta: str, cuerpo: dict) -> Any:
         return self._pedir("POST", ruta, json=cuerpo)
 
+    def put(self, ruta: str, cuerpo: dict) -> Any:
+        return self._pedir("PUT", ruta, json=cuerpo)
+
     def _pedir(self, metodo: str, ruta: str, auth: bool = True, **kwargs) -> Any:
         headers = {}
         if auth and self._token:
@@ -85,7 +90,9 @@ class ApiClient:
             if resp.status_code == 401 and auth:
                 self._token = None
                 raise SesionExpirada(401, mensaje)
-            raise ErrorApi(resp.status_code, mensaje, cuerpo.get("errores") if isinstance(cuerpo, dict) else None)
+            if not isinstance(cuerpo, dict):
+                cuerpo = {}
+            raise ErrorApi(resp.status_code, mensaje, cuerpo.get("errores"), cuerpo.get("campo"))
         return cuerpo
 
     def cerrar(self) -> None:
