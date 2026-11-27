@@ -9,10 +9,8 @@ import pytest
 
 from app import config
 from app.datos.demo import DatosDemo, PASSWORD_DEMO
+from app.verificar import PARAMS
 from app.views.shell import RUTAS, VentanaPrincipal
-
-PARAMS = {"compras.lote": {"folio": "L-0235"}, "compras.estado": {"id_proveedor": 1},
-          "fac.timbrada": {"folio": "F-0012"}, "fin.estado": {"id_cliente": 1}, "inv.movimientos": {"id_producto": 5}}
 
 
 @pytest.fixture
@@ -137,3 +135,9 @@ def test_devolucion_requiere_administrador(ventana):
     dev.pass_admin.setText(PASSWORD_DEMO)
     dev._autorizar()
     assert dev.btn_procesar.isEnabled()
+
+
+def test_verificacion_del_ejecutable_abre_todas_las_pantallas(qapp, capsys):
+    # El ejecutable corre esta misma comprobación con --verificar (CI del frontend).
+    from app.verificar import verificar
+    assert verificar() == 0, capsys.readouterr().out
