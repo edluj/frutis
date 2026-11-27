@@ -24,6 +24,7 @@ Scripts de MySQL 8.0 (8.0.16 o posterior, por los `CHECK` y `JSON_TABLE`). Histo
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh               # producción: sin datos
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --con-datos   # desarrollo
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --con-pruebas # base desechable + pruebas
+MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --migraciones  # base existente: aplica las migraciones que falten
 ```
 
 En cada Pull Request que toca `database/`, GitHub Actions levanta MySQL 8.0 y corre `--con-pruebas` (`.github/workflows/database.yml`).

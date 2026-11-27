@@ -1,0 +1,8 @@
+[Unit]
+Description=Respaldo diario de la base de datos de Frutis ERP
+After=mysqld.service
+Requires=mysqld.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/frutis-respaldo

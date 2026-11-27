@@ -9,6 +9,8 @@
 --   mysql -h 127.0.0.1 -u root -p < database/migraciones/004_mermas_motivo_plaga.sql
 -- =============================================================================
 
+-- Aplicada si: SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'frutis' AND table_name = 'mermas' AND column_name = 'motivo' AND column_type LIKE '%''plaga''%'
+
 USE frutis;
 
 ALTER TABLE mermas
