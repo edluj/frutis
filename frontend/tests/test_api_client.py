@@ -87,3 +87,11 @@ def test_rutas_que_faltan_en_el_middleware():
     with pytest.raises(NoConectado) as exc:
         datos.lista_gastos()
     assert exc.value.ruta == "/finanzas/gastos"
+
+
+def test_certificado_no_valido_da_mensaje_claro():
+    def falla(req):
+        raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate")
+    datos = DatosApi(cliente(falla), "POS-1")
+    with pytest.raises(ErrorNegocio, match="certificado del servidor"):
+        datos.login("cajero1", "x")

@@ -23,6 +23,9 @@ datos/*.txt
 *.pem
 usuarios.txt
 
+deploy/certificados/
+frontend/frutis.ini
+
 # Respaldos de base de datos
 *.sql.gz
 *.dump

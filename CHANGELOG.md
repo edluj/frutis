@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 ## [Sin publicar]
 
 ### Agregado
+- Ejecutable de la aplicación (HU-13, EC-14): `frontend/frutis.spec` con PyInstaller; el workflow **Frontend** corre las 76 pruebas del frontend y construye `Frutis.exe` (Windows) y `Frutis` (Linux) como artefactos.
+- Configuración de cada terminal en `frutis.ini` junto al ejecutable (`frontend/frutis.ini.example`) y mensaje claro cuando no se puede validar el certificado del servidor.
+- Instalación del servidor y las terminales en `deploy/README.md`: certificados de la red local (`deploy/generar_certificados.sh`) y servicio de systemd para el middleware.
 - Facturación CFDI 4.0 de punta a punta con PAC simulado (HU-12a, HU-32, HU-33; SC-05): datos fiscales de clientes, timbrado desde un ticket con UUID y XML, un ticket por factura vigente, borrador que se conserva si el PAC no responde, descarga del XML y cancelación con motivo SAT. Los XML se guardan en `middleware/cfdi/` (fuera del repositorio).
 - Administración de usuarios de punta a punta (HU-18): rutas `/admin/usuarios` y `/admin/roles`; usuario y correo únicos, contraseña guardada con PBKDF2, nadie se da de baja a sí mismo, y una contraseña nueva o una baja cierran las sesiones abiertas del usuario.
 - Clientes de crédito y venta a crédito de punta a punta (HU-39, HU-38a): rutas `/finanzas/clientes-credito` para darlos de alta, editarlos y suspenderlos, y `/pos/clientes-credito` para que el cajero elija al cliente en el cobro con su disponible.

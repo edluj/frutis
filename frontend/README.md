@@ -21,7 +21,7 @@ python -m venv .venv
 
 **Modo demostración** (`--demo` o `FRUTIS_DEMO=1`): todo vive en memoria con los datos del lienzo de diseño (fecha de referencia: lunes 2 de noviembre de 2026) y nada se guarda. Usuarios: `alopez` (Administrador), `mperez` (Cajero), `cruiz` (Contador); `lgomez` está inactivo. Contraseña `Frutis2026!`.
 
-**Contra el middleware** se configura con variables de entorno:
+**Contra el middleware** se configura con `frutis.ini` junto al ejecutable (plantilla en `frutis.ini.example`) o con variables de entorno, que tienen prioridad:
 
 | Variable | Default | Uso |
 | --- | --- | --- |
@@ -29,6 +29,18 @@ python -m venv .venv
 | `FRUTIS_CA_PATH` | — | Autoridad certificadora local para validar el certificado del servidor (HTTPS) |
 | `FRUTIS_TERMINAL` | `POS-1` | Nombre de la terminal |
 | `FRUTIS_TIMEOUT` | `5` | Segundos de espera por petición |
+
+## Ejecutable
+
+`frutis.spec` empaqueta la aplicación con PyInstaller en un solo archivo, con las fuentes, las imágenes y el aviso de privacidad:
+
+```bash
+cd frontend
+.venv/bin/pip install -r requirements-build.txt
+.venv/bin/pyinstaller --noconfirm frutis.spec     # dist/Frutis en Linux, dist/Frutis.exe en Windows
+```
+
+PyInstaller solo construye para el sistema donde corre. El workflow **Frontend** (`.github/workflows/frontend.yml`) corre las pruebas y genera `Frutis.exe` y el binario de Linux en cada Pull Request que toca `frontend/`; se descargan como artefactos de la ejecución. La instalación en las terminales está en `deploy/README.md`.
 
 ## Estructura
 
@@ -75,4 +87,4 @@ Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario`, `/compras`, `
 - Báscula e impresora usan simulador (R-01, R-02): tocar la báscula en el cobro permite capturar el peso a mano, y el ticket se muestra en pantalla.
 - `resources/aviso_privacidad.txt` tiene un texto provisional: falta el aviso vigente del cliente (HU-21).
 - El emisor de la factura muestra `[RFC DEL EMISOR]` hasta tener los datos fiscales y el CSD de la frutería.
-- Empaquetado con PyInstaller (`frutis.spec`) y servicio local de hardware en cada terminal.
+- Servicio local de hardware en cada terminal: fuera de alcance por SC-05 (se usa el simulador).
