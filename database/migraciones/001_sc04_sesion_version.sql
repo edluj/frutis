@@ -6,6 +6,8 @@
 --   mysql -h 127.0.0.1 -u root -p < database/migraciones/001_sc04_sesion_version.sql
 -- =============================================================================
 
+-- Aplicada si: SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'frutis' AND table_name = 'usuarios' AND column_name = 'sesion_version'
+
 USE frutis;
 
 ALTER TABLE usuarios
