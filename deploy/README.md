@@ -11,12 +11,12 @@ Instalación del servidor local y de las terminales. Nada de esta carpeta lleva 
 ## Servidor (Rocky Linux)
 
 1. **Base de datos:** `deploy/rocky-linux/instalar_servidor_bd.sh` instala MySQL, la base, los usuarios `frutis_app` y `frutis_respaldo`, el firewall del 3306 y el respaldo diario (guía en `deploy/rocky-linux/README.md`). Para una base ya instalada basta `database/instalar.sh --migraciones`.
-2. **Primer Administrador** (solo en producción, después del paso 3): `cd middleware && .venv/bin/python -m app.crear_administrador --usuario <usuario> --nombre "<nombre>" --correo <correo>`.
-3. **Configuración:** `cp deploy/.env.example deploy/.env` y llenar `FRUTIS_DB_USER`, `FRUTIS_DB_PASSWORD` y `FRUTIS_JWT_SECRET` (`openssl rand -hex 32`).
-4. **Middleware:**
+2. **Configuración:** `cp deploy/.env.example deploy/.env` y llenar `FRUTIS_DB_USER`, `FRUTIS_DB_PASSWORD` y `FRUTIS_JWT_SECRET` (`openssl rand -hex 32`).
+3. **Middleware:**
    ```bash
    cd middleware && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
    ```
+4. **Primer Administrador** (solo en producción): `cd middleware && .venv/bin/python -m app.crear_administrador --usuario <usuario> --nombre "<nombre>" --correo <correo>`. Pide la contraseña sin mostrarla.
 5. **Certificados:** con las IP o nombres con que las terminales buscan al servidor:
    ```bash
    ./deploy/generar_certificados.sh 192.168.1.10
