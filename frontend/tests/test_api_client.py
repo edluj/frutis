@@ -85,5 +85,5 @@ def test_caja_cerrada_devuelve_none():
 def test_rutas_que_faltan_en_el_middleware():
     datos = DatosApi(cliente(lambda req: httpx.Response(200, json={})), "POS-1")
     with pytest.raises(NoConectado) as exc:
-        datos.lista_proveedores()
-    assert exc.value.ruta == "/compras/proveedores"
+        datos.lista_gastos()
+    assert exc.value.ruta == "/finanzas/gastos"

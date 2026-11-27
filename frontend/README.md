@@ -57,13 +57,13 @@ Las vistas nunca llaman a la red: piden datos a un objeto `datos` (`DatosApi` o 
 
 ## Pantallas y estado de conexión
 
-Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario` (ver `middleware/README.md`). Con el servidor ya funcionan el login, el menú por rol y todo el Punto de Venta: apertura, cobro, corte y devoluciones, además de categorías y productos. La caja de la apertura es la terminal de `FRUTIS_TERMINAL`. Las demás pantallas muestran un aviso con la ruta que falta en lugar de inventar datos; en modo demostración se pueden recorrer todas.
+Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario` y `/compras` (ver `middleware/README.md`). Con el servidor ya funcionan el login, el menú por rol y todo el Punto de Venta: apertura, cobro, corte y devoluciones, además de categorías, productos, proveedores y lotes de compra. La caja de la apertura es la terminal de `FRUTIS_TERMINAL`. Las demás pantallas muestran un aviso con la ruta que falta en lugar de inventar datos; en modo demostración se pueden recorrer todas.
 
 | Módulo | Pantallas (código del diseño) | Historias | Ruta que falta en el middleware |
 | --- | --- | --- | --- |
 | Acceso | Login (ACC-01), Inicio y menú (ACC-02) | HU-04, HU-14, HU-21 | `/reportes/resumen-del-dia` para el resumen de inicio |
 | Punto de Venta | Apertura (POS-01), Cobro (POS-02), Corte (POS-03), Devolución (POS-04) | HU-06, 07a, 08, 09, 15, 16a, 30, 36, 38a | Solo la lista de clientes de crédito del cobro (`/finanzas/clientes-credito`) |
-| Proveedores y Compras | Proveedores, Registrar lote, Lotes, Detalle de lote, Cuentas por pagar, Estado de cuenta (PRV-01 a 06) | HU-11, 23, 25 | `/compras/...` |
+| Proveedores y Compras | Proveedores, Registrar lote, Lotes, Detalle de lote, Cuentas por pagar, Estado de cuenta (PRV-01 a 06) | HU-11, 23, 25 | Proveedores y lotes (PRV-01 a 04) ya conectados. Faltan `/compras/cuentas-por-pagar` y el estado de cuenta (HU-25) |
 | Facturación | Generar, Factura timbrada, Emitidas, Clientes fiscales (FAC-01 a 04) | HU-12a, 32, 33 | `/facturacion/...` y elegir PAC (R-06) |
 | Finanzas | Dashboard, Gastos, Flujo, Clientes de crédito, Cuentas por cobrar, Estado de cuenta (FIN-01 a 06) | HU-26, 27, 37, 38b, 39 | `/finanzas/...` |
 | Catálogo e Inventario | Categorías, Productos, Existencias, Lotes y caducidades, Movimientos, Ajuste e historial de precios, Mermas (CAT-01 a 08) | HU-10, 17, 22, 24, 31 | Categorías y productos (CAT-01, CAT-02) ya conectados. Faltan `/inventario/existencias`, `/inventario/lotes`, `/inventario/movimientos`, `/inventario/precios` y `/inventario/mermas` |
