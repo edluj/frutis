@@ -81,6 +81,11 @@ jobs:
       - name: Construir con PyInstaller
         run: pyinstaller --noconfirm --log-level WARN frutis.spec
 
+      - name: Todas las pantallas están en el ejecutable
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./dist/${{ matrix.archivo }} --verificar | tee verificacion.txt && ! grep -q FALTA verificacion.txt
+
       - name: Prueba de arranque (10 s en modo demostración, sin pantalla)
         env:
           QT_QPA_PLATFORM: offscreen

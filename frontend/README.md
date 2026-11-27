@@ -38,7 +38,10 @@ python -m venv .venv
 cd frontend
 .venv/bin/pip install -r requirements-build.txt
 .venv/bin/pyinstaller --noconfirm frutis.spec     # dist/Frutis en Linux, dist/Frutis.exe en Windows
+QT_QPA_PLATFORM=offscreen dist/Frutis --verificar  # abre las 34 pantallas como Administrador (demostración)
 ```
+
+`--verificar` existe porque `shell.py` abre cada pantalla con `importlib` y PyInstaller no las ve solo: `frutis.spec` las incluye con `collect_submodules("app")`, y la CI corre la verificación en el `.exe` y en el binario de Linux.
 
 PyInstaller solo construye para el sistema donde corre. El workflow **Frontend** (`.github/workflows/frontend.yml`) corre las pruebas y genera `Frutis.exe` y el binario de Linux en cada Pull Request que toca `frontend/`; se descargan como artefactos de la ejecución. La instalación en las terminales está en `deploy/README.md`.
 

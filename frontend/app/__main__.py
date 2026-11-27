@@ -21,7 +21,11 @@ def crear_datos(cfg: configuracion.Config):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Frutis ERP + POS")
     parser.add_argument("--demo", action="store_true", help="usa datos de demostración en memoria, sin servidor")
+    parser.add_argument("--verificar", action="store_true", help="comprueba que todas las pantallas estén incluidas")
     args, resto = parser.parse_known_args()
+    if args.verificar:
+        from app.verificar import verificar
+        return verificar()
     cfg = configuracion.cargar(demo_forzado=args.demo)
 
     app = QApplication([sys.argv[0], *resto])

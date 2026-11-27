@@ -5,7 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 ## [Sin publicar]
 
 ### Agregado
-- Ejecutable de la aplicación (HU-13, EC-14): `frontend/frutis.spec` con PyInstaller; el workflow **Frontend** corre las 76 pruebas del frontend y construye `Frutis.exe` (Windows) y `Frutis` (Linux) como artefactos.
+- Ejecutable de la aplicación (HU-13, EC-14): `frontend/frutis.spec` con PyInstaller; el workflow **Frontend** corre las 76 pruebas del frontend y construye `Frutis.exe` (Windows) y `Frutis` (Linux) como artefactos. Antes de subirlos, `--verificar` abre las 34 pantallas dentro del ejecutable.
 - Configuración de cada terminal en `frutis.ini` junto al ejecutable (`frontend/frutis.ini.example`) y mensaje claro cuando no se puede validar el certificado del servidor.
 - Instalación del servidor y las terminales en `deploy/README.md`: certificados de la red local (`deploy/generar_certificados.sh`) y servicio de systemd para el middleware.
 - Facturación CFDI 4.0 de punta a punta con PAC simulado (HU-12a, HU-32, HU-33; SC-05): datos fiscales de clientes, timbrado desde un ticket con UUID y XML, un ticket por factura vigente, borrador que se conserva si el PAC no responde, descarga del XML y cancelación con motivo SAT. Los XML se guardan en `middleware/cfdi/` (fuera del repositorio).

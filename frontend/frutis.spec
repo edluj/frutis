@@ -5,6 +5,11 @@
 # PyInstaller no genera el .exe desde Linux (lo hace .github/workflows/frontend.yml).
 import sys
 
+from PyInstaller.utils.hooks import collect_submodules
+
+# collect_submodules importa el paquete en otro proceso: necesita frontend/ en la ruta.
+sys.path.insert(0, SPECPATH)
+
 # Módulos de Qt que la aplicación no usa: solo QtCore, QtGui, QtWidgets y QtSvg.
 SIN_USAR = [
     "PySide6.QtNetwork", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtQuickWidgets", "PySide6.QtWebEngineCore",
@@ -19,7 +24,8 @@ a = Analysis(
     ["app/__main__.py"],
     pathex=["."],
     datas=[("app/resources", "app/resources")],
-    hiddenimports=["PySide6.QtSvg"],
+    # shell.py abre cada pantalla con importlib a partir de RUTAS: PyInstaller no las ve solo.
+    hiddenimports=["PySide6.QtSvg", *collect_submodules("app")],
     excludes=SIN_USAR,
     noarchive=False,
 )
