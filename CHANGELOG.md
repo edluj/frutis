@@ -5,6 +5,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 ## [Sin publicar]
 
 ### Agregado
+- Catálogo conectado de punta a punta (HU-22, HU-10): rutas `/inventario/categorias` y `/inventario/productos` en el middleware, con nombre y código de barras únicos, baja lógica, historial de precios y bitácora; las pantallas Categorías (CAT-01) y Productos (CAT-02) ya usan el servidor.
+- Los errores de negocio del middleware indican el `campo` del formulario al que se refieren.
 - Apertura, corte de caja y devoluciones de punta a punta (HU-09, HU-15, HU-30, SC-02):
   - Base de datos: `sp_abrir_caja`, `sp_cerrar_caja`, `sp_registrar_devolucion` y `fn_efectivo_esperado`, con 48 pruebas nuevas.
   - Middleware: rutas `POST /pos/cajas`, `GET /pos/cortes/actual`, `GET /pos/cortes/ultimo`, `POST /pos/cortes`, `GET /pos/ventas/{folio}` y `/pos/devoluciones` (administradores, autorización firmada del Administrador y registro).
