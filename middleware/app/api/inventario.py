@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
@@ -6,7 +7,10 @@ from sqlalchemy import Connection
 from app.api.auth import ip_de
 from app.db import get_conn
 from app.repositories import inventario as repositorio
-from app.schemas.inventario import Categoria, CategoriaEntrada, ProductoCatalogo, ProductoEntrada
+from app.schemas.inventario import (
+    Categoria, CategoriaEntrada, LoteConExistencia, Merma, MermaEntrada, MermaRegistrada, MotivoMerma,
+    ProductoCatalogo, ProductoEntrada,
+)
 from app.security.dependencias import UsuarioActual, requiere
 from app.security.sanitizar import PATRON_TEXTO_SEGURO
 from app.services import inventario as servicio
@@ -82,3 +86,31 @@ def editar_producto(
     conn: Connection = Depends(get_conn),
 ):
     return servicio.guardar_producto(conn, datos, usuario, ip_de(request), id_producto)
+
+
+@router.get("/productos/{id_producto}/lotes", response_model=list[LoteConExistencia],
+            dependencies=[Depends(requiere("inventario", "ver"))])
+def lotes_de_producto(id_producto: Id, conn: Connection = Depends(get_conn)):
+    return repositorio.lotes_con_existencia(conn, id_producto)
+
+
+# ---------------------------------------------------------------- mermas (HU-17)
+
+@router.get("/mermas", response_model=list[Merma], dependencies=[Depends(requiere("inventario", "ver"))])
+def mermas(
+    motivo: MotivoMerma | None = None,
+    desde: date | None = None,
+    hasta: date | None = None,
+    conn: Connection = Depends(get_conn),
+):
+    return repositorio.listar_mermas(conn, motivo, desde, hasta)
+
+
+@router.post("/mermas", response_model=MermaRegistrada, status_code=status.HTTP_201_CREATED)
+def registrar_merma(
+    datos: MermaEntrada,
+    request: Request,
+    usuario: UsuarioActual = Depends(requiere("inventario", "crear")),
+    conn: Connection = Depends(get_conn),
+):
+    return servicio.registrar_merma(conn, datos, usuario, ip_de(request))

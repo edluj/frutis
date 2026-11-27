@@ -1,0 +1,13 @@
+; Configuración de una terminal de Frutis. Copiar como frutis.ini junto al ejecutable.
+; Las variables de entorno FRUTIS_API_URL, FRUTIS_CA_PATH, FRUTIS_TERMINAL y FRUTIS_TIMEOUT
+; tienen prioridad sobre este archivo.
+
+[terminal]
+; Dirección del middleware en la red local. Con certificado: https://<ip del servidor>:8443
+api_url = https://192.168.1.10:8443
+; Autoridad certificadora local (deploy/generar_certificados.sh). Ruta relativa a este archivo.
+ca_path = frutis-ca.crt
+; Nombre de esta caja; debe ser único en la frutería.
+terminal = POS-01
+; Segundos de espera por petición.
+timeout = 5

@@ -13,6 +13,8 @@ from app.config import Config
 
 CABECERA_RENOVADO = "X-Token-Renovado"
 SIN_SERVIDOR = "No hay conexión con el servidor. Revise la red e intente de nuevo."
+CERTIFICADO_INVALIDO = ("No se pudo validar el certificado del servidor. Revise ca_path en frutis.ini "
+                        "(la autoridad certificadora local, frutis-ca.crt).")
 
 
 class ErrorApi(Exception):
@@ -74,7 +76,8 @@ class ApiClient:
         try:
             resp = self._http.request(metodo, ruta, headers=headers, **kwargs)
         except httpx.TransportError as exc:
-            raise ErrorApi(0, SIN_SERVIDOR) from exc
+            mensaje = CERTIFICADO_INVALIDO if "CERTIFICATE_VERIFY_FAILED" in str(exc) else SIN_SERVIDOR
+            raise ErrorApi(0, mensaje) from exc
         if renovado := resp.headers.get(CABECERA_RENOVADO):
             self._token = renovado
         if resp.status_code == 204:

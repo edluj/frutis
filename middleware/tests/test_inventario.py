@@ -170,3 +170,64 @@ def test_acepta_iva_de_16(cliente, compras, monkeypatch):
     monkeypatch.setattr(repo, "insertar_producto", MagicMock(return_value=9))
     r = cliente.post("/inventario/productos", json={**NUEVO, "tasa_iva": "0.16"}, headers=compras)
     assert r.status_code == 201
+
+
+# ---------------------------------------------------------------- mermas (HU-17)
+
+FILA_LOTE = {"id_inventario": 4, "cantidad_disponible": Decimal("10.000"), "costo_unitario": Decimal("32.00"),
+             "nombre": "Manzana roja", "unidad_venta": "kg"}
+MERMA = {"id_producto": 1, "folio_lote": "L-00000002", "cantidad": "1.255", "motivo": "golpe", "observaciones": ""}
+
+
+@pytest.fixture
+def lote_manzana(monkeypatch):
+    monkeypatch.setattr(repo, "existencia_de_lote", lambda c, p, f: FILA_LOTE if (p, f) == (1, "L-00000002") else None)
+    registrar = MagicMock()
+    monkeypatch.setattr(repo, "registrar_merma", registrar)
+    return registrar
+
+
+def test_merma_descuenta_y_calcula_el_costo_del_lote(cliente, compras, lote_manzana):
+    r = cliente.post("/inventario/mermas", json=MERMA, headers=compras)
+    assert r.status_code == 201
+    # 1.255 kg x 32.00 = 40.16
+    assert r.json() == {"costo": "40.16"}
+    assert lote_manzana.call_args.args[1:] == (4, Decimal("1.255"), "golpe", Decimal("40.16"), None, 3)
+    assert auditoria.registrar.call_args.args[2] == "merma_alta"
+
+
+def test_merma_mayor_a_la_existencia_del_lote(cliente, compras, lote_manzana):
+    r = cliente.post("/inventario/mermas", json={**MERMA, "cantidad": "10.001"}, headers=compras)
+    assert r.status_code == 409
+    assert r.json() == {"detail": "La cantidad supera la existencia del lote.", "campo": "cantidad"}
+    lote_manzana.assert_not_called()
+
+
+def test_merma_de_pieza_fraccionada(cliente, compras, lote_manzana, monkeypatch):
+    pina = {**FILA_LOTE, "nombre": "Piña", "unidad_venta": "pieza"}
+    monkeypatch.setattr(repo, "existencia_de_lote", lambda c, p, f: pina)
+    r = cliente.post("/inventario/mermas", json={**MERMA, "cantidad": "1.5"}, headers=compras)
+    assert r.status_code == 409 and r.json()["campo"] == "cantidad"
+    lote_manzana.assert_not_called()
+
+
+def test_merma_en_lote_que_no_tiene_el_producto(cliente, compras, lote_manzana):
+    r = cliente.post("/inventario/mermas", json={**MERMA, "folio_lote": "L-00000001"}, headers=compras)
+    assert r.status_code == 404 and r.json()["campo"] == "lote"
+
+
+@pytest.mark.parametrize("cambio", [{"motivo": "robo"}, {"cantidad": "0"}, {"folio_lote": "1 OR 1=1"},
+                                    {"observaciones": "<script>"}])
+def test_merma_invalida_422(cliente, compras, cambio):
+    assert cliente.post("/inventario/mermas", json={**MERMA, **cambio}, headers=compras).status_code == 422
+
+
+def test_cajero_no_registra_mermas(cliente, compras, cabeceras):
+    assert cliente.post("/inventario/mermas", json=MERMA, headers=cabeceras).status_code == 403
+
+
+def test_lista_de_mermas_filtra_por_motivo(cliente, compras, monkeypatch):
+    recibido = {}
+    monkeypatch.setattr(repo, "listar_mermas", lambda c, m, d, h: recibido.update(motivo=m) or [])
+    assert cliente.get("/inventario/mermas", params={"motivo": "plaga"}, headers=compras).status_code == 200
+    assert recibido == {"motivo": "plaga"}

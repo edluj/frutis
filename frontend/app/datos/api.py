@@ -1,6 +1,7 @@
 """Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
 /compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, proveedores y lotes de compra.
+productos, mermas, proveedores, lotes de compra, clientes de crédito, usuarios y facturación
+(con el PAC simulado de SC-05).
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -15,25 +16,17 @@ from app.datos import ErrorNegocio, NoConectado
 # Ruta que falta en el middleware para cada operación todavía no conectada.
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
-    "clientes_credito_pos": "/finanzas/clientes-credito",
     "cuentas_por_pagar": "/compras/cuentas-por-pagar", "pagar_lote": "/compras/cuentas-por-pagar",
     "estado_cuenta_proveedor": "/compras/proveedores/{id}/estado-de-cuenta",
-    "timbres_disponibles": "/facturacion", "ticket_para_factura": "/facturacion",
-    "lista_clientes_fiscales": "/facturacion/clientes", "guardar_cliente_fiscal": "/facturacion/clientes",
-    "timbrar": "/facturacion/facturas", "detalle_factura": "/facturacion/facturas",
-    "lista_facturas": "/facturacion/facturas", "cancelar_factura": "/facturacion/facturas",
     "dashboard": "/finanzas/dashboard", "lista_gastos": "/finanzas/gastos", "registrar_gasto": "/finanzas/gastos",
-    "flujo": "/finanzas/flujo", "lista_clientes_credito": "/finanzas/clientes-credito",
-    "guardar_cliente_credito": "/finanzas/clientes-credito", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
+    "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
     "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
     "existencias": "/inventario/existencias",
-    "lotes_caducidad": "/inventario/lotes", "lotes_de_producto": "/inventario/lotes",
+    "lotes_caducidad": "/inventario/lotes",
     "movimientos": "/inventario/movimientos", "previsualizar_precios": "/inventario/precios",
     "aplicar_precios": "/inventario/precios", "historial": "/inventario/precios/historial",
-    "lista_mermas": "/inventario/mermas", "registrar_merma": "/inventario/mermas",
     "cajeros": "/reportes", "reporte": "/reportes",
-    "lista_usuarios": "/admin/usuarios", "nombres_roles": "/admin/roles", "guardar_usuario": "/admin/usuarios",
     "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
     "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
     "activar_metodo": "/admin/metodos-pago", "guardar_dispositivos": "/admin/dispositivos",
@@ -47,8 +40,11 @@ TONO_ESTADO = {"Normal": "verde", "Bajo": "rojo", "Sin existencia": "rojo", "Por
 
 # Estatus del proveedor (PRV-01) y motivos de merma de la base -> texto de pantalla.
 ESTATUS_PROVEEDOR = {"Activos": "activos", "Inactivos": "inactivos", "Todos": "todos"}
-MOTIVOS_MERMA = {"maduracion": "Maduración", "golpe": "Golpe", "caducidad": "Caducidad",
+MOTIVOS_MERMA = {"maduracion": "Maduración", "golpe": "Golpe", "plaga": "Plaga u hongo", "caducidad": "Caducidad",
                  "devolucion": "Devolución en mal estado", "otro": "Otro"}
+MOTIVO_DE_PANTALLA = {v: k for k, v in MOTIVOS_MERMA.items()}
+MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre",
+         "Noviembre", "Diciembre"]
 TONO_PAGO = {"Pagado": "verde", "Vencido": "rojo", "Pendiente": "naranja"}
 
 
@@ -62,6 +58,10 @@ def _estatus_cxp(saldo: Decimal, vence: date | None) -> tuple[str, str]:
     if dias <= 3:
         return (f"Vence en {dias} días" if dias != 1 else "Vence mañana"), "naranja"
     return "Pendiente", "gris"
+
+
+# Estatus de los clientes de crédito (FIN-04).
+FILTRO_CLIENTES = {"Activo": "activos", "Pago vencido": "activos", "Suspendido": "suspendidos"}
 
 
 # Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
@@ -329,6 +329,142 @@ class DatosApi:
             self._llamar(self.api.put, f"/inventario/productos/{datos['id_producto']}", cuerpo)
         else:
             self._llamar(self.api.post, "/inventario/productos", cuerpo)
+
+    # ---------------------------------------------------------- mermas (HU-17)
+    def lotes_de_producto(self, id_producto: int) -> list[dict]:
+        filas = self._llamar(self.api.get, f"/inventario/productos/{id_producto}/lotes")
+        return [dict(lote=l["folio"], queda=_dec(l["queda"]), caducidad=date.fromisoformat(l["caducidad"]),
+                     costo=_dec(l["costo"])) for l in filas]
+
+    def lista_mermas(self, motivo: str = "Todos") -> dict:
+        filas = self._llamar(self.api.get, "/inventario/mermas", motivo=MOTIVO_DE_PANTALLA.get(motivo))
+        salida = [dict(fecha=date.fromisoformat(m["fecha"]), id_producto=m["id_producto"], producto=m["producto"],
+                       unidad=m["unidad_venta"], lote=m["lote"], cantidad=_dec(m["cantidad"]),
+                       motivo=MOTIVOS_MERMA.get(m["motivo"], m["motivo"]), costo=_dec(m["costo"]),
+                       usuario=m["usuario"], obs=m["observaciones"] or "") for m in filas]
+        hoy = date.today()
+        mes = [f for f in salida if (f["fecha"].year, f["fecha"].month) == (hoy.year, hoy.month)]
+        return dict(filas=salida, mes=MESES[hoy.month - 1],
+                    kilos_mes=sum((f["cantidad"] for f in mes if f["unidad"] == "kg"), Decimal("0")),
+                    costo_mes=sum((f["costo"] for f in mes), Decimal("0")))
+
+    def registrar_merma(self, id_producto: int, lote: str, cantidad: Decimal, motivo: str, obs: str) -> Decimal:
+        r = self._llamar(self.api.post, "/inventario/mermas", dict(
+            id_producto=id_producto, folio_lote=lote, cantidad=str(cantidad),
+            motivo=MOTIVO_DE_PANTALLA.get(motivo, "otro"), observaciones=obs or None))
+        return _dec(r["costo"])
+
+    # ---------------------------------------------------------- crédito (HU-39, HU-38a)
+    def clientes_credito_pos(self) -> list[dict]:
+        return [dict(id=c["id_cliente_credito"], nombre=c["nombre"], limite=_dec(c["limite_credito"]), debe=_dec(c["debe"]),
+                     disponible=_dec(c["disponible"]), dias=c["dias_credito"], vence=date.fromisoformat(c["vence"]),
+                     vencido=c["vencido"]) for c in self._llamar(self.api.get, "/pos/clientes-credito")]
+
+    def lista_clientes_credito(self, busqueda: str = "", estatus: str = "Todos") -> list[dict]:
+        filas = self._llamar(self.api.get, "/finanzas/clientes-credito", busqueda=busqueda or None,
+                             estatus=FILTRO_CLIENTES.get(estatus, "todos"))
+        salida = []
+        for c in filas:
+            limite, debe = _dec(c["limite_credito"]), _dec(c["debe"])
+            base = "Activo" if c["activo"] else "Suspendido"
+            vista = "Pago vencido" if c["activo"] and c["vencido"] else base
+            if estatus not in ("Todos", vista):
+                continue
+            salida.append(dict(id=c["id_cliente_credito"], nombre=c["nombre"], telefono=c["telefono"], limite=limite,
+                               dias=c["dias_credito"], estatus=base, fiscal=c["rfc_fiscal"], debe=debe,
+                               uso=float(debe / limite) if limite else 0, estatus_vista=vista))
+        return salida
+
+    def guardar_cliente_credito(self, datos: dict) -> None:
+        cuerpo = dict(nombre=datos["nombre"], telefono=datos["telefono"], limite_credito=str(datos["limite"]),
+                      dias_credito=datos["dias"], rfc_fiscal=datos.get("fiscal") or None,
+                      activo=datos.get("estatus", "Activo") != "Suspendido")
+        if datos.get("id"):
+            self._llamar(self.api.put, f"/finanzas/clientes-credito/{datos['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/finanzas/clientes-credito", cuerpo)
+
+    # ---------------------------------------------------------- usuarios (HU-18)
+    def _roles(self) -> dict[str, int]:
+        return {r["nombre"]: r["id_rol"] for r in self._llamar(self.api.get, "/admin/roles")}
+
+    def nombres_roles(self) -> list[str]:
+        return list(self._roles())
+
+    def lista_usuarios(self, busqueda: str = "", rol: str = "Todos") -> list[dict]:
+        id_rol = self._roles().get(rol) if rol != "Todos" else None
+        filas = self._llamar(self.api.get, "/admin/usuarios", busqueda=busqueda or None, id_rol=id_rol)
+        return [dict(id=u["id_usuario"], nombre=u["nombre_completo"], usuario=u["usuario"], correo=u["correo"],
+                     rol=u["rol"], activo=u["activo"],
+                     ultimo=datetime.fromisoformat(u["ultimo_acceso"]) if u["ultimo_acceso"] else None) for u in filas]
+
+    def guardar_usuario(self, datos: dict) -> None:
+        id_rol = self._roles().get(datos["rol"])
+        if id_rol is None:
+            raise ErrorNegocio("Elija un rol activo.", "rol")
+        cuerpo = dict(nombre_completo=datos["nombre"], usuario=datos["usuario"], correo=datos["correo"], id_rol=id_rol,
+                      activo=datos.get("activo", True), password=datos.get("password") or None)
+        if datos.get("id"):
+            self._llamar(self.api.put, f"/admin/usuarios/{datos['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/admin/usuarios", cuerpo)
+
+    # ---------------------------------------------------------- facturación (HU-32, HU-12a, HU-33)
+    def timbres_disponibles(self) -> tuple[int, int]:
+        t = self._llamar(self.api.get, "/facturacion/timbres")
+        return t["disponibles"], t["contratados"]
+
+    @staticmethod
+    def _concepto_de(c: dict) -> dict:
+        return dict(nombre=c["nombre"], unidad=c["unidad_venta"], cantidad=_dec(c["cantidad"]),
+                    precio=_dec(c["precio_unitario"]), importe=_dec(c["importe"]), clave_sat=c["clave_sat"])
+
+    def ticket_para_factura(self, folio: str) -> dict:
+        t = self._llamar(self.api.get, f"/facturacion/tickets/{quote(folio)}")
+        return dict(folio=t["folio"], total=_dec(t["total"]), metodo=t["metodo"],
+                    renglones=[self._concepto_de(c) for c in t["conceptos"]])
+
+    def lista_clientes_fiscales(self, busqueda: str = "") -> list[dict]:
+        return [dict(id=c["id_cliente"], rfc=c["rfc"], razon_social=c["razon_social"], regimen=c["regimen_fiscal"],
+                     cp=c["codigo_postal"], correo=c["correo"], facturas=c["facturas"])
+                for c in self._llamar(self.api.get, "/facturacion/clientes", busqueda=busqueda or None)]
+
+    def guardar_cliente_fiscal(self, datos: dict, original: str | None = None) -> None:
+        cuerpo = dict(rfc=datos["rfc"], razon_social=datos["razon_social"], regimen_fiscal=datos["regimen"],
+                      codigo_postal=datos["cp"], correo=datos["correo"])
+        actual = next((c for c in self.lista_clientes_fiscales(original) if c["rfc"] == original), None) if original else None
+        if actual:
+            self._llamar(self.api.put, f"/facturacion/clientes/{actual['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/facturacion/clientes", cuerpo)
+
+    def _factura_de(self, f: dict) -> dict:
+        timbrado = datetime.fromisoformat(f["fecha_timbrado"]) if f["fecha_timbrado"] else None
+        return dict(folio=f["folio"], fecha=timbrado.date() if timbrado else date.today(), timbrado=timbrado,
+                    rfc=f["rfc"], uuid=f["uuid"] or "", total=_dec(f["total"]), estatus=f["estatus"],
+                    ticket=f["folio_venta"], uso=f["uso_cfdi"], forma=f["forma_pago"], metodo_pago=f["metodo_pago"],
+                    correo=f["correo"], cliente=dict(razon_social=f["razon_social"], rfc=f["rfc"], cp=f["codigo_postal"],
+                                                     correo=f["correo"]),
+                    renglones=[self._concepto_de(c) for c in f["conceptos"]])
+
+    def timbrar(self, datos: dict) -> dict:
+        cuerpo = dict(folio_venta=datos["ticket"], rfc=datos["rfc"], regimen_fiscal=datos["regimen"],
+                      codigo_postal=datos["cp"], uso_cfdi=datos["uso"], forma_pago=datos["forma"],
+                      metodo_pago=datos["metodo_pago"], correo=datos["correo"])
+        return self._factura_de(self._llamar(self.api.post, "/facturacion/facturas", cuerpo))
+
+    def detalle_factura(self, folio: str) -> dict:
+        return self._factura_de(self._llamar(self.api.get, f"/facturacion/facturas/{quote(folio)}"))
+
+    def lista_facturas(self, texto: str = "", desde=None, hasta=None, estatus: str = "Todas") -> list[dict]:
+        filas = self._llamar(self.api.get, "/facturacion/facturas", texto=texto or None,
+                             desde=desde.isoformat() if desde else None, hasta=hasta.isoformat() if hasta else None,
+                             estatus=estatus.rstrip("s") if estatus != "Todas" else "Todas")
+        return [dict(self._factura_de(f), cliente=f["razon_social"]) for f in filas]
+
+    def cancelar_factura(self, folio: str, motivo: str, sustituto: str) -> None:
+        self._llamar(self.api.post, f"/facturacion/facturas/{quote(folio)}/cancelacion",
+                     dict(motivo=motivo[:2], folio_sustituto=sustituto.strip().upper() or None))
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod

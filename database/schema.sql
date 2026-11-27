@@ -221,7 +221,7 @@ CREATE TABLE mermas (
   id_merma       INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   id_inventario  INT UNSIGNED  NOT NULL,
   cantidad       DECIMAL(10,3) NOT NULL,
-  motivo         ENUM('maduracion','golpe','caducidad','devolucion','otro') NOT NULL,
+  motivo         ENUM('maduracion','golpe','caducidad','devolucion','otro','plaga') NOT NULL,
   costo_total    DECIMAL(12,2) NOT NULL COMMENT 'cantidad x costo del lote',
   observaciones  VARCHAR(255)  NULL,
   id_usuario     INT UNSIGNED  NOT NULL,
