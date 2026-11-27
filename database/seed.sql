@@ -1,50 +1,16 @@
 -- =============================================================================
 -- Datos de prueba para desarrollo y CI. NUNCA se carga en producción.
+-- Roles, permisos y métodos de pago vienen de catalogos.sql, que se carga siempre.
 -- Contraseña de todos los usuarios de prueba: Frutis2026!
 -- =============================================================================
 
 USE frutis;
-
--- Roles base propuestos en el APR (flujo U); pendientes de confirmar en SC-02 (#3)
-INSERT INTO roles (id_rol, nombre, descripcion, es_sistema) VALUES
-  (1, 'Administrador', 'Acceso total; no se edita ni se elimina', TRUE),
-  (2, 'Cajero',        'Cobro en mostrador y corte de caja',      FALSE),
-  (3, 'Compras',       'Proveedores, lotes y cuentas por pagar',  FALSE),
-  (4, 'Contador',      'Facturación, finanzas y reportes',        FALSE);
-
--- Matriz de permisos (ver, crear, editar, eliminar)
-INSERT INTO permisos (id_rol, modulo, puede_ver, puede_crear, puede_editar, puede_eliminar) VALUES
-  (1, 'pos',         TRUE,  TRUE,  TRUE,  TRUE),
-  (1, 'compras',     TRUE,  TRUE,  TRUE,  TRUE),
-  (1, 'facturacion', TRUE,  TRUE,  TRUE,  TRUE),
-  (1, 'finanzas',    TRUE,  TRUE,  TRUE,  TRUE),
-  (1, 'inventario',  TRUE,  TRUE,  TRUE,  TRUE),
-  (1, 'reportes',    TRUE,  TRUE,  TRUE,  TRUE),
-  (1, 'admin',       TRUE,  TRUE,  TRUE,  TRUE),
-  (2, 'pos',         TRUE,  TRUE,  FALSE, FALSE),
-  (2, 'inventario',  TRUE,  FALSE, FALSE, FALSE),
-  (3, 'compras',     TRUE,  TRUE,  TRUE,  TRUE),
-  (3, 'inventario',  TRUE,  TRUE,  TRUE,  FALSE),
-  (3, 'reportes',    TRUE,  FALSE, FALSE, FALSE),
-  (4, 'facturacion', TRUE,  TRUE,  TRUE,  TRUE),
-  (4, 'finanzas',    TRUE,  TRUE,  TRUE,  TRUE),
-  (4, 'reportes',    TRUE,  FALSE, FALSE, FALSE),
-  (4, 'pos',         TRUE,  FALSE, FALSE, FALSE);
 
 INSERT INTO usuarios (id_usuario, nombre_completo, usuario, correo, password_hash, id_rol) VALUES
   (1, 'Administrador de prueba', 'admin',     'admin@frutis.test',     'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 1),
   (2, 'Cajero de prueba',        'cajero1',   'cajero1@frutis.test',   'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 2),
   (3, 'Compras de prueba',       'compras1',  'compras1@frutis.test',  'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 3),
   (4, 'Contador de prueba',      'contador1', 'contador1@frutis.test', 'pbkdf2_sha256$210000$c873d8bd77070764e47d848d30db5c15$d47a3a0bc3080bdc345fdb94158a37116b917bb588196b17f0a85fcbe2291053', 4);
-
-INSERT INTO metodos_pago (id_metodo, nombre, clave_sat, es_efectivo, es_credito, activo) VALUES
-  (1, 'Efectivo',           '01', TRUE,  FALSE, TRUE),
-  (2, 'Tarjeta de débito',  '28', FALSE, FALSE, TRUE),
-  (3, 'Tarjeta de crédito', '04', FALSE, FALSE, TRUE),
-  (4, 'Transferencia',      '03', FALSE, FALSE, TRUE),
-  (5, 'Crédito',            '99', FALSE, TRUE,  TRUE),
-  -- Solo para pagar a proveedores (HU-25): inactivo, no aparece en la caja del POS.
-  (6, 'Cheque',             '02', FALSE, FALSE, FALSE);
 
 INSERT INTO categorias (id_categoria, nombre, descripcion) VALUES
   (1, 'Frutas',   'Fruta fresca'),

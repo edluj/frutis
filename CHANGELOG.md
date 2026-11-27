@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+### Corregido
+- Una instalación de producción quedaba sin roles, permisos ni métodos de pago (solo venían en `seed.sql`) y sin nadie que pudiera iniciar sesión. Ahora `database/catalogos.sql` se carga siempre (también con `--migraciones`, antes de las migraciones) y `python -m app.crear_administrador` crea el primer Administrador. La CI instala una base de producción y crea su Administrador.
+
 ### Agregado
 - Inventario completo (HU-24, HU-31): existencias con valor y días de alcance, lotes por caducar, movimientos por producto (entradas, ventas, mermas y devoluciones) y ajuste masivo de precios con historial.
 - Cuentas por pagar (HU-25): lista con vencimientos, abonos con Transferencia, Efectivo o Cheque que quedan como egreso, y estado de cuenta del proveedor. Método "Cheque" inactivo para el POS (`database/migraciones/005_metodo_cheque.sql`).

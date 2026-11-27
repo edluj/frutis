@@ -11,22 +11,23 @@ Instalación del servidor local y de las terminales. Nada de esta carpeta lleva 
 ## Servidor (Rocky Linux)
 
 1. **Base de datos:** `deploy/rocky-linux/instalar_servidor_bd.sh` instala MySQL, la base, los usuarios `frutis_app` y `frutis_respaldo`, el firewall del 3306 y el respaldo diario (guía en `deploy/rocky-linux/README.md`). Para una base ya instalada basta `database/instalar.sh --migraciones`.
-2. **Configuración:** `cp deploy/.env.example deploy/.env` y llenar `FRUTIS_DB_USER`, `FRUTIS_DB_PASSWORD` y `FRUTIS_JWT_SECRET` (`openssl rand -hex 32`).
-3. **Middleware:**
+2. **Primer Administrador** (solo en producción, después del paso 3): `cd middleware && .venv/bin/python -m app.crear_administrador --usuario <usuario> --nombre "<nombre>" --correo <correo>`.
+3. **Configuración:** `cp deploy/.env.example deploy/.env` y llenar `FRUTIS_DB_USER`, `FRUTIS_DB_PASSWORD` y `FRUTIS_JWT_SECRET` (`openssl rand -hex 32`).
+4. **Middleware:**
    ```bash
    cd middleware && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
    ```
-4. **Certificados:** con las IP o nombres con que las terminales buscan al servidor:
+5. **Certificados:** con las IP o nombres con que las terminales buscan al servidor:
    ```bash
    ./deploy/generar_certificados.sh 192.168.1.10
    ```
    Agregar a `deploy/.env` las tres líneas que imprime (`FRUTIS_BIND_HOST`, `FRUTIS_CERT_PATH`, `FRUTIS_KEY_PATH`). Sin certificado el middleware solo escucha en `127.0.0.1`. Guardar `certificados/frutis-ca.key` fuera del servidor: con ella se firman certificados.
-5. **Abrir el puerto solo a la red interna** (ajustar la red):
+6. **Abrir el puerto solo a la red interna** (ajustar la red):
    ```bash
    sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="192.168.1.0/24" port port="8443" protocol="tcp" accept'
    sudo firewall-cmd --reload
    ```
-6. **Arrancar:** a mano con `cd middleware && .venv/bin/python -m app`, o como servicio con `frutis-middleware.service` (instrucciones dentro del archivo). La plantilla del servicio no se ha probado en el servidor de desarrollo.
+7. **Arrancar:** a mano con `cd middleware && .venv/bin/python -m app`, o como servicio con `frutis-middleware.service` (instrucciones dentro del archivo). La plantilla del servicio no se ha probado en el servidor de desarrollo.
 
 ## Terminales (Windows o Linux)
 

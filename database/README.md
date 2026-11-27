@@ -12,6 +12,7 @@ Scripts de MySQL 8.0 (8.0.16 o posterior, por los `CHECK` y `JSON_TABLE`). Histo
 | `procedures/sp_abrir_caja.sql` | Apertura de un turno: una caja abierta por terminal y por cajero (HU-15) |
 | `procedures/sp_cerrar_caja.sql` | Corte con arqueo; exige observaciones si hay diferencia (HU-09) |
 | `procedures/sp_registrar_devolucion.sql` | Devolución parcial o total: reingreso al lote o merma, y reembolso en efectivo, tarjeta, transferencia o abono a crédito (HU-30) |
+| `catalogos.sql` | Roles, matriz de permisos y métodos de pago; se carga en toda instalación (`INSERT IGNORE`) |
 | `seed.sql` | Datos de prueba para desarrollo; nunca datos reales |
 | `tests/test_cobro.sql` | 50 pruebas del esquema, `fn_importe_peso`, el cobro y la venta a crédito |
 | `tests/test_corte_devolucion.sql` | 48 pruebas de apertura, corte y devoluciones |
@@ -21,11 +22,13 @@ Scripts de MySQL 8.0 (8.0.16 o posterior, por los `CHECK` y `JSON_TABLE`). Histo
 ## Instalar
 
 ```bash
-MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh               # producción: sin datos
+MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh               # producción: catálogos, sin datos de prueba
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --con-datos   # desarrollo
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --con-pruebas # base desechable + pruebas
-MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --migraciones  # base existente: aplica las migraciones que falten
+MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --migraciones  # base existente: catálogos y migraciones que falten
 ```
+
+Una base de producción no trae usuarios: el primer Administrador se crea con `cd middleware && .venv/bin/python -m app.crear_administrador --usuario <usuario> --nombre "<nombre>" --correo <correo>` (pide la contraseña sin mostrarla).
 
 En cada Pull Request que toca `database/`, GitHub Actions levanta MySQL 8.0 y corre `--con-pruebas` (`.github/workflows/database.yml`).
 
