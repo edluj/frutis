@@ -1,0 +1,7 @@
+AVISO DE PRIVACIDAD
+
+[TEXTO VIGENTE PENDIENTE DE ENTREGAR POR FRUTERÍA FRUTIS]
+
+Este archivo debe reemplazarse con el aviso de privacidad vigente que entregue el cliente
+antes de la instalación (HU-21, requisito legal de la cotización). La aplicación muestra
+su contenido tal cual desde el botón "Aviso de privacidad" de la pantalla de inicio de sesión.

@@ -6,19 +6,27 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api import auth, pos
+from app.api import admin, auth, compras, facturacion, finanzas, inventario, pos
 from app.errores import ErrorNegocio
 
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="Frutis ERP + POS", version="0.1.0")
+app = FastAPI(title="Frutis ERP + POS", version="1.0.0")
 app.include_router(auth.router)
 app.include_router(pos.router)
+app.include_router(inventario.router)
+app.include_router(compras.router)
+app.include_router(finanzas.router)
+app.include_router(admin.router)
+app.include_router(facturacion.router)
 
 
 @app.exception_handler(ErrorNegocio)
 def error_negocio(_: Request, exc: ErrorNegocio) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.mensaje})
+    contenido = {"detail": exc.mensaje}
+    if exc.campo:
+        contenido["campo"] = exc.campo
+    return JSONResponse(status_code=exc.status_code, content=contenido)
 
 
 @app.exception_handler(RequestValidationError)

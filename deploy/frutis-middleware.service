@@ -1,0 +1,18 @@
+# Servicio del middleware de Frutis (systemd). Ajuste User y las rutas si el repositorio
+# no está en /home/rocky/frutis, y luego:
+#   sudo cp deploy/frutis-middleware.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now frutis-middleware
+[Unit]
+Description=Frutis ERP + POS - middleware FastAPI
+After=network-online.target mysqld.service
+Wants=network-online.target
+
+[Service]
+User=rocky
+WorkingDirectory=/home/rocky/frutis/middleware
+ExecStart=/home/rocky/frutis/middleware/.venv/bin/python -m app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -20,7 +20,9 @@ for f in "$DIR"/procedures/*.sql; do run "procedures/$(basename "$f")"; done
 
 case "${1:-}" in
   --con-datos)   run seed.sql ;;
-  --con-pruebas) run seed.sql; run tests/test_cobro.sql ;;
+  --con-pruebas)
+    run seed.sql
+    for f in "$DIR"/tests/*.sql; do run "tests/$(basename "$f")"; done ;;
   "") ;;
   *) echo "Opción desconocida: $1" >&2; exit 2 ;;
 esac

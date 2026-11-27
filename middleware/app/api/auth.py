@@ -30,5 +30,6 @@ def logout(
     usuario: UsuarioActual = Depends(usuario_actual),
     conn: Connection = Depends(get_conn),
 ):
+    usuarios.cerrar_sesiones(conn, usuario.id_usuario)
     auditoria.registrar(conn, "auth", "logout", None, ip_de(request), usuario.id_usuario, usuario.usuario)
     conn.commit()

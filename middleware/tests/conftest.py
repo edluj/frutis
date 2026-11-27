@@ -21,7 +21,8 @@ PASSWORD = "Frutis2026!"
 HASH = hash_password(PASSWORD)
 CAJERO = {
     "id_usuario": 2, "usuario": "cajero1", "nombre_completo": "Cajero de prueba",
-    "password_hash": HASH, "id_rol": 2, "rol": "Cajero", "bloqueado": 0,
+    "password_hash": HASH, "id_rol": 2, "rol": "Cajero", "sesion_version": 0,
+    "activo": 1, "bloqueado": 0,
 }
 PERMISOS_CAJERO = [
     {"modulo": "pos", "puede_ver": 1, "puede_crear": 1, "puede_editar": 0, "puede_eliminar": 0},
@@ -39,7 +40,14 @@ def cliente(conn, monkeypatch):
         yield conn
 
     app.dependency_overrides[get_conn] = _conn
-    monkeypatch.setattr(usuarios, "buscar_activo", lambda c, i: CAJERO if i == 2 else None)
+    # Copia propia por prueba: logout cambia sesion_version.
+    cajero = dict(CAJERO)
+
+    def cerrar_sesiones(c, i):
+        cajero["sesion_version"] += 1
+
+    monkeypatch.setattr(usuarios, "buscar_activo", lambda c, i: cajero if i == 2 else None)
+    monkeypatch.setattr(usuarios, "cerrar_sesiones", cerrar_sesiones)
     monkeypatch.setattr(usuarios, "permisos_del_rol", lambda c, r: PERMISOS_CAJERO)
     monkeypatch.setattr(auditoria, "registrar", MagicMock())
     yield TestClient(app)
@@ -48,4 +56,4 @@ def cliente(conn, monkeypatch):
 
 @pytest.fixture
 def cabeceras():
-    return {"Authorization": f"Bearer {crear_token(2)}"}
+    return {"Authorization": f"Bearer {crear_token(2, 0)}"}

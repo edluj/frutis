@@ -31,16 +31,17 @@ def usuario_actual(
     credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
     conn: Connection = Depends(get_conn),
 ) -> UsuarioActual:
-    id_usuario = leer_token(credenciales.credentials) if credenciales else None
-    fila = usuarios.buscar_activo(conn, id_usuario) if id_usuario is not None else None
-    if fila is None:
+    datos = leer_token(credenciales.credentials) if credenciales else None
+    fila = usuarios.buscar_activo(conn, datos[0]) if datos is not None else None
+    # Una versión distinta significa que el usuario cerró sesión después de recibir el token.
+    if fila is None or fila["sesion_version"] != datos[1]:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Sesión inválida o expirada.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     # Cada petición válida renueva la sesión: expira por inactividad.
-    response.headers[CABECERA_RENOVADO] = crear_token(id_usuario)
+    response.headers[CABECERA_RENOVADO] = crear_token(fila["id_usuario"], fila["sesion_version"])
     return UsuarioActual(
         id_usuario=fila["id_usuario"],
         usuario=fila["usuario"],

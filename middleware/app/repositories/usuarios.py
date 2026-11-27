@@ -6,7 +6,8 @@ MINUTOS_BLOQUEO = 5
 
 _COLUMNAS = """
     u.id_usuario, u.usuario, u.nombre_completo, u.password_hash, u.id_rol,
-    r.nombre AS rol, COALESCE(u.bloqueado_hasta > NOW(), FALSE) AS bloqueado
+    r.nombre AS rol, r.es_sistema AS es_administrador, u.sesion_version,
+    u.activo AND r.activo AS activo, COALESCE(u.bloqueado_hasta > NOW(), FALSE) AS bloqueado
 """
 
 
@@ -15,7 +16,7 @@ def buscar_para_login(conn: Connection, usuario: str) -> RowMapping | None:
         text(f"""
             SELECT {_COLUMNAS}
             FROM usuarios u JOIN roles r ON r.id_rol = u.id_rol
-            WHERE u.usuario = :usuario AND u.activo = TRUE AND r.activo = TRUE
+            WHERE u.usuario = :usuario
         """),
         {"usuario": usuario},
     ).mappings().first()
@@ -54,6 +55,36 @@ def registrar_acceso(conn: Connection, id_usuario: int) -> None:
             SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = NOW()
             WHERE id_usuario = :id
         """),
+        {"id": id_usuario},
+    )
+
+
+def limpiar_intentos(conn: Connection, id_usuario: int) -> None:
+    """Contraseña correcta fuera del login (autorización de un Administrador)."""
+    conn.execute(
+        text("UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id_usuario = :id"),
+        {"id": id_usuario},
+    )
+
+
+def administradores(conn: Connection) -> list[RowMapping]:
+    """Usuarios activos con el rol de sistema: los únicos que autorizan devoluciones (SC-02)."""
+    return list(
+        conn.execute(
+            text("""
+                SELECT u.usuario, u.nombre_completo
+                FROM usuarios u JOIN roles r ON r.id_rol = u.id_rol
+                WHERE r.es_sistema = TRUE AND r.activo = TRUE AND u.activo = TRUE
+                ORDER BY u.nombre_completo
+            """)
+        ).mappings()
+    )
+
+
+def cerrar_sesiones(conn: Connection, id_usuario: int) -> None:
+    """Invalida todos los tokens emitidos al usuario, en cualquier terminal (SC-04)."""
+    conn.execute(
+        text("UPDATE usuarios SET sesion_version = sesion_version + 1 WHERE id_usuario = :id"),
         {"id": id_usuario},
     )
 

@@ -1,0 +1,35 @@
+name: Middleware
+
+on:
+  pull_request:
+    paths:
+      - 'middleware/**'
+      - '.github/workflows/middleware.yml'
+  push:
+    branches: [develop, main]
+    paths:
+      - 'middleware/**'
+      - '.github/workflows/middleware.yml'
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    name: Pruebas del middleware en Python 3.12
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: middleware
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: middleware/requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Correr pruebas
+        run: python -m pytest -q

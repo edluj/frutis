@@ -197,11 +197,11 @@ CALL t_ok((SELECT estatus FROM v_cuentas_por_cobrar WHERE id_cxc = @cxc) = 'Paga
 -- -----------------------------------------------------------------------------
 
 CALL t_espera_error(
-  'INSERT INTO devoluciones (folio, id_venta, id_detalle, id_caja, cantidad, importe, motivo, estado_producto, id_usuario, id_autoriza) VALUES (''D-1'', 1, 1, 1, 0.5, 15.00, ''Golpeada'', ''danado'', 2, 2)',
+  'INSERT INTO devoluciones (folio, id_venta, id_detalle, id_caja, cantidad, importe, motivo, estado_producto, reembolso, id_usuario, id_autoriza) VALUES (''D-1'', 1, 1, 1, 0.5, 15.00, ''Golpeada'', ''danado'', ''efectivo'', 2, 2)',
   'Solo un Administrador puede autorizar devoluciones.', 'Un cajero no puede autorizar devoluciones');
 
-INSERT INTO devoluciones (folio, id_venta, id_detalle, id_caja, cantidad, importe, motivo, estado_producto, id_usuario, id_autoriza)
-VALUES ('D-1', 1, 1, 1, 0.5, 15.00, 'Golpeada', 'danado', 2, 1);
+INSERT INTO devoluciones (folio, id_venta, id_detalle, id_caja, cantidad, importe, motivo, estado_producto, reembolso, id_usuario, id_autoriza)
+VALUES ('D-1', 1, 1, 1, 0.5, 15.00, 'Golpeada', 'danado', 'efectivo', 2, 1);
 CALL t_ok((SELECT COUNT(*) FROM devoluciones WHERE folio = 'D-1') = 1, 'El Administrador sí autoriza devoluciones');
 
 CALL t_espera_error('UPDATE devoluciones SET id_autoriza = 4 WHERE folio = ''D-1''',
