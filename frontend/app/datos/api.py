@@ -1,6 +1,6 @@
 """Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
 /compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, proveedores y lotes de compra.
+productos, mermas, proveedores y lotes de compra.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -28,10 +28,9 @@ _RUTAS_PENDIENTES = {
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
     "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
     "existencias": "/inventario/existencias",
-    "lotes_caducidad": "/inventario/lotes", "lotes_de_producto": "/inventario/lotes",
+    "lotes_caducidad": "/inventario/lotes",
     "movimientos": "/inventario/movimientos", "previsualizar_precios": "/inventario/precios",
     "aplicar_precios": "/inventario/precios", "historial": "/inventario/precios/historial",
-    "lista_mermas": "/inventario/mermas", "registrar_merma": "/inventario/mermas",
     "cajeros": "/reportes", "reporte": "/reportes",
     "lista_usuarios": "/admin/usuarios", "nombres_roles": "/admin/roles", "guardar_usuario": "/admin/usuarios",
     "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
@@ -47,8 +46,11 @@ TONO_ESTADO = {"Normal": "verde", "Bajo": "rojo", "Sin existencia": "rojo", "Por
 
 # Estatus del proveedor (PRV-01) y motivos de merma de la base -> texto de pantalla.
 ESTATUS_PROVEEDOR = {"Activos": "activos", "Inactivos": "inactivos", "Todos": "todos"}
-MOTIVOS_MERMA = {"maduracion": "Maduración", "golpe": "Golpe", "caducidad": "Caducidad",
+MOTIVOS_MERMA = {"maduracion": "Maduración", "golpe": "Golpe", "plaga": "Plaga u hongo", "caducidad": "Caducidad",
                  "devolucion": "Devolución en mal estado", "otro": "Otro"}
+MOTIVO_DE_PANTALLA = {v: k for k, v in MOTIVOS_MERMA.items()}
+MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre",
+         "Noviembre", "Diciembre"]
 TONO_PAGO = {"Pagado": "verde", "Vencido": "rojo", "Pendiente": "naranja"}
 
 
@@ -329,6 +331,30 @@ class DatosApi:
             self._llamar(self.api.put, f"/inventario/productos/{datos['id_producto']}", cuerpo)
         else:
             self._llamar(self.api.post, "/inventario/productos", cuerpo)
+
+    # ---------------------------------------------------------- mermas (HU-17)
+    def lotes_de_producto(self, id_producto: int) -> list[dict]:
+        filas = self._llamar(self.api.get, f"/inventario/productos/{id_producto}/lotes")
+        return [dict(lote=l["folio"], queda=_dec(l["queda"]), caducidad=date.fromisoformat(l["caducidad"]),
+                     costo=_dec(l["costo"])) for l in filas]
+
+    def lista_mermas(self, motivo: str = "Todos") -> dict:
+        filas = self._llamar(self.api.get, "/inventario/mermas", motivo=MOTIVO_DE_PANTALLA.get(motivo))
+        salida = [dict(fecha=date.fromisoformat(m["fecha"]), id_producto=m["id_producto"], producto=m["producto"],
+                       unidad=m["unidad_venta"], lote=m["lote"], cantidad=_dec(m["cantidad"]),
+                       motivo=MOTIVOS_MERMA.get(m["motivo"], m["motivo"]), costo=_dec(m["costo"]),
+                       usuario=m["usuario"], obs=m["observaciones"] or "") for m in filas]
+        hoy = date.today()
+        mes = [f for f in salida if (f["fecha"].year, f["fecha"].month) == (hoy.year, hoy.month)]
+        return dict(filas=salida, mes=MESES[hoy.month - 1],
+                    kilos_mes=sum((f["cantidad"] for f in mes if f["unidad"] == "kg"), Decimal("0")),
+                    costo_mes=sum((f["costo"] for f in mes), Decimal("0")))
+
+    def registrar_merma(self, id_producto: int, lote: str, cantidad: Decimal, motivo: str, obs: str) -> Decimal:
+        r = self._llamar(self.api.post, "/inventario/mermas", dict(
+            id_producto=id_producto, folio_lote=lote, cantidad=str(cantidad),
+            motivo=MOTIVO_DE_PANTALLA.get(motivo, "otro"), observaciones=obs or None))
+        return _dec(r["costo"])
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod

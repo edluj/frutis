@@ -1,4 +1,5 @@
 """Consultas del catálogo: categorías y productos (flujos O y P)."""
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import Connection, RowMapping, text
@@ -150,4 +151,77 @@ def registrar_cambio_precio(
             VALUES (:producto, :anterior, :nuevo, :usuario, :motivo)
         """),
         {"producto": id_producto, "anterior": anterior, "nuevo": nuevo, "usuario": id_usuario, "motivo": motivo},
+    )
+
+
+# ---------------------------------------------------------------- mermas (HU-17)
+
+def lotes_con_existencia(conn: Connection, id_producto: int) -> list[RowMapping]:
+    """Lotes del producto que todavía tienen existencia, primero el que caduca antes (FEFO)."""
+    return list(
+        conn.execute(
+            text("""
+                SELECT l.folio, i.cantidad_disponible AS queda, i.fecha_caducidad AS caducidad,
+                       i.costo_unitario AS costo
+                FROM inventario i JOIN lotes_compras l ON l.id_lote = i.id_lote
+                WHERE i.id_producto = :producto AND i.cantidad_disponible > 0
+                ORDER BY i.fecha_caducidad, i.id_inventario
+            """),
+            {"producto": id_producto},
+        ).mappings()
+    )
+
+
+def existencia_de_lote(conn: Connection, id_producto: int, folio: str) -> RowMapping | None:
+    # FOR UPDATE: una venta o una devolución no pueden mover la misma fila a la vez.
+    return conn.execute(
+        text("""
+            SELECT i.id_inventario, i.cantidad_disponible, i.costo_unitario, p.nombre, p.unidad_venta
+            FROM inventario i
+            JOIN lotes_compras l ON l.id_lote = i.id_lote
+            JOIN productos p ON p.id_producto = i.id_producto
+            WHERE i.id_producto = :producto AND l.folio = :folio
+            FOR UPDATE
+        """),
+        {"producto": id_producto, "folio": folio},
+    ).mappings().first()
+
+
+def registrar_merma(
+    conn: Connection, id_inventario: int, cantidad: Decimal, motivo: str, costo: Decimal,
+    observaciones: str | None, id_usuario: int,
+) -> None:
+    conn.execute(
+        text("UPDATE inventario SET cantidad_disponible = cantidad_disponible - :cantidad WHERE id_inventario = :id"),
+        {"cantidad": cantidad, "id": id_inventario},
+    )
+    conn.execute(
+        text("""
+            INSERT INTO mermas (id_inventario, cantidad, motivo, costo_total, observaciones, id_usuario)
+            VALUES (:inventario, :cantidad, :motivo, :costo, :observaciones, :usuario)
+        """),
+        {"inventario": id_inventario, "cantidad": cantidad, "motivo": motivo, "costo": costo,
+         "observaciones": observaciones, "usuario": id_usuario},
+    )
+
+
+def listar_mermas(conn: Connection, motivo: str | None, desde: date | None, hasta: date | None) -> list[RowMapping]:
+    return list(
+        conn.execute(
+            text("""
+                SELECT DATE(m.fecha) AS fecha, p.id_producto, p.nombre AS producto, p.unidad_venta, l.folio AS lote,
+                       m.cantidad, m.motivo, m.costo_total AS costo, u.usuario, m.observaciones
+                FROM mermas m
+                JOIN inventario i ON i.id_inventario = m.id_inventario
+                JOIN lotes_compras l ON l.id_lote = i.id_lote
+                JOIN productos p ON p.id_producto = i.id_producto
+                JOIN usuarios u ON u.id_usuario = m.id_usuario
+                WHERE (:motivo IS NULL OR m.motivo = :motivo)
+                  AND (:desde IS NULL OR m.fecha >= :desde)
+                  AND (:hasta IS NULL OR m.fecha < :hasta + INTERVAL 1 DAY)
+                ORDER BY m.fecha DESC, m.id_merma DESC
+                LIMIT 500
+            """),
+            {"motivo": motivo, "desde": desde, "hasta": hasta},
+        ).mappings()
     )

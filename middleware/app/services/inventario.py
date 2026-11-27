@@ -1,17 +1,22 @@
-"""Reglas del catálogo: categorías (HU-22) y productos (HU-10)."""
+"""Reglas del catálogo: categorías (HU-22), productos (HU-10) y mermas (HU-17)."""
+from decimal import Decimal
+
 from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError
 
 from app.errores import ErrorNegocio
 from app.repositories import auditoria
 from app.repositories import inventario as repositorio
-from app.schemas.inventario import Categoria, CategoriaEntrada, ProductoCatalogo, ProductoEntrada
+from app.schemas.inventario import (
+    Categoria, CategoriaEntrada, MermaEntrada, MermaRegistrada, ProductoCatalogo, ProductoEntrada,
+)
 from app.security.dependencias import UsuarioActual
 
 ER_DUP_ENTRY = 1062
 NOMBRE_REPETIDO = "Ya existe una categoría con ese nombre."
 CODIGO_REPETIDO = "El código de barras ya está registrado."
 MOTIVO_AJUSTE = "Ajuste individual"
+CENTAVO = Decimal("0.01")
 
 
 def _auditar(conn: Connection, accion: str, detalle: str, ip: str | None, usuario: UsuarioActual) -> None:
@@ -94,3 +99,22 @@ def guardar_producto(
     salida = ProductoCatalogo(**repositorio.producto_catalogo(conn, id_producto))
     conn.commit()
     return salida
+
+
+def registrar_merma(conn: Connection, datos: MermaEntrada, usuario: UsuarioActual, ip: str | None) -> MermaRegistrada:
+    """Descuenta la merma de un lote y guarda su costo (HU-17)."""
+    fila = repositorio.existencia_de_lote(conn, datos.id_producto, datos.folio_lote)
+    if fila is None:
+        raise ErrorNegocio(404, "El producto no está en ese lote.", "lote")
+    if fila["unidad_venta"] == "pieza" and datos.cantidad != datos.cantidad.to_integral_value():
+        raise ErrorNegocio(409, f"{fila['nombre']} se maneja por pieza: use cantidades enteras.", "cantidad")
+    if datos.cantidad > fila["cantidad_disponible"]:
+        raise ErrorNegocio(409, "La cantidad supera la existencia del lote.", "cantidad")
+    costo = (datos.cantidad * fila["costo_unitario"]).quantize(CENTAVO)
+    repositorio.registrar_merma(
+        conn, fila["id_inventario"], datos.cantidad, datos.motivo, costo, datos.observaciones, usuario.id_usuario
+    )
+    _auditar(conn, "merma_alta", f"{fila['nombre']} {datos.cantidad} · {datos.folio_lote} · ${costo} · {datos.motivo}",
+             ip, usuario)
+    conn.commit()
+    return MermaRegistrada(costo=costo)

@@ -96,7 +96,7 @@ class MermasView(PaginaBase):
         r = self.intentar(self.ctx.datos.lista_mermas, self.f_motivo.currentText())
         if not r:
             return
-        self.poner_estado(f"Octubre: {r['kilos_mes']:.1f} kg · {fmt.dinero(r['costo_mes'])}")
+        self.poner_estado(f"{r['mes']}: {r['kilos_mes']:.1f} kg · {fmt.dinero(r['costo_mes'])}")
         self.tabla.poner_filas([[fmt.fecha(m["fecha"]), m["producto"], m["lote"], fmt.cantidad(m["cantidad"], m["unidad"], 1),
                                  m["motivo"], fmt.dinero(m["costo"]), m["usuario"]] for m in r["filas"]])
 

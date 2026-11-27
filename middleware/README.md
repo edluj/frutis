@@ -48,6 +48,9 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `POST /inventario/categorias`, `PUT /inventario/categorias/{id}` | `inventario` crear / editar | Nombre único; no se da de baja una categoría con productos activos (HU-22) |
 | `GET /inventario/productos` | `inventario` ver | Filtros `busqueda` (nombre o código), `id_categoria` y `existencia` (`todas`, `bajo`, `por_caducar`); trae existencia por lotes y estado |
 | `POST /inventario/productos`, `PUT /inventario/productos/{id}` | `inventario` crear / editar | Código de barras único, precio mayor a 0, baja lógica; cada cambio de precio queda en `historial_precios` (HU-10) |
+| `GET /inventario/productos/{id}/lotes` | `inventario` ver | Lotes del producto con existencia, primero el que caduca antes |
+| `GET /inventario/mermas` | `inventario` ver | Filtros `motivo`, `desde` y `hasta` |
+| `POST /inventario/mermas` | `inventario` crear | Descuenta del lote y guarda el costo (cantidad × costo del lote); no puede superar la existencia del lote (HU-17) |
 | `GET /compras/proveedores` | `compras` ver | Filtros `busqueda` (razón social o RFC) y `estatus` (`activos`, `inactivos`, `todos`); incluye el saldo por pagar |
 | `POST /compras/proveedores`, `PUT /compras/proveedores/{id}` | `compras` crear / editar | RFC único de 12 o 13 caracteres, correo válido; no se da de baja con saldo por pagar (HU-23) |
 | `GET /compras/lotes` | `compras` ver | Filtros `id_proveedor`, `desde`, `hasta` y `pago` (`Pagado`, `Pendiente`, `Vencido`) |
