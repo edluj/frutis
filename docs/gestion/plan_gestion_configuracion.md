@@ -168,13 +168,15 @@ Un elemento que ya está en línea base solo cambia con una solicitud aprobada; 
 
 **Solicitudes de cambio.**
 
-| ID | Cambio | Origen | Clase | Decisión (29/10/2026) |
+| ID | Cambio | Origen | Clase | Decisión |
 | --- | --- | --- | --- | --- |
 | [SC-01](https://github.com/edluj/frutis/issues/2) | Seis tablas de soporte fuera de las 14 cotizadas | Documento de Arquitectura | Mayor | Aprobado sin costo adicional |
 | [SC-02](https://github.com/edluj/frutis/issues/3) | Rol que autoriza devoluciones (no existe Supervisor) | Refinement de requisitos | Menor | Aprobado: autoriza el Administrador |
 | [SC-03](https://github.com/edluj/frutis/issues/4) | Cuentas por cobrar sin tabla ni venta a crédito | APR, punto 3 | Mayor | Aprobado: sí hay venta a crédito; costo por confirmar |
+| [SC-04](https://github.com/edluj/frutis/issues/14) | Cerrar sesión invalida el token (HU-14) | Criterio de aceptación de HU-14 | Por clasificar | Implementado en #15; decisión pendiente de registrar |
+| [SC-05](https://github.com/edluj/frutis/issues/19) | Proyecto de prueba: sin hardware real, timbrado real, prueba de desempeño ni manual (HU-07b, HU-16b, HU-12b, HU-19, HU-20); CFDI con PAC simulado | Líder de proyecto | Mayor | Aprobado (26/11/2026) |
 
-El CCB las resolvió el 29 de octubre de 2026, antes de crear LB-1.
+El CCB resolvió SC-01 a SC-03 el 29 de octubre de 2026, antes de crear LB-1.
 
 ## 8. Respaldo, recuperación y entornos
 
