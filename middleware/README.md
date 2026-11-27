@@ -60,6 +60,9 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `POST /compras/lotes` | `compras` crear | En una transacción: lote, existencia por producto, costo vigente y, si `dias_credito` > 0, la cuenta por pagar (HU-11) |
 | `GET /finanzas/clientes-credito` | `finanzas` ver | Filtros `busqueda` y `estatus` (`activos`, `suspendidos`, `todos`); lo que debe cada cliente y si tiene una cuenta vencida |
 | `POST /finanzas/clientes-credito`, `PUT /finanzas/clientes-credito/{id}` | `finanzas` crear / editar | Límite mayor a 0 y días de crédito obligatorios; un cliente suspendido no compra a crédito (HU-39) |
+| `GET /admin/roles` | `admin` ver | Roles activos |
+| `GET /admin/usuarios` | `admin` ver | Filtros `busqueda` (nombre o usuario) e `id_rol`; nunca devuelve el hash |
+| `POST /admin/usuarios`, `PUT /admin/usuarios/{id}` | `admin` crear / editar | Usuario y correo únicos, contraseña de al menos 8 caracteres guardada con PBKDF2; nadie se da de baja ni se quita el rol de Administrador a sí mismo; una contraseña nueva o una baja cierran las sesiones del usuario (HU-18) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 

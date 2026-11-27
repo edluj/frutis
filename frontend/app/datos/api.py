@@ -1,6 +1,6 @@
 """Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
 /compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, mermas, proveedores, lotes de compra y clientes de crédito.
+productos, mermas, proveedores, lotes de compra, clientes de crédito y usuarios.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -30,7 +30,6 @@ _RUTAS_PENDIENTES = {
     "movimientos": "/inventario/movimientos", "previsualizar_precios": "/inventario/precios",
     "aplicar_precios": "/inventario/precios", "historial": "/inventario/precios/historial",
     "cajeros": "/reportes", "reporte": "/reportes",
-    "lista_usuarios": "/admin/usuarios", "nombres_roles": "/admin/roles", "guardar_usuario": "/admin/usuarios",
     "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
     "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
     "activar_metodo": "/admin/metodos-pago", "guardar_dispositivos": "/admin/dispositivos",
@@ -387,6 +386,31 @@ class DatosApi:
             self._llamar(self.api.put, f"/finanzas/clientes-credito/{datos['id']}", cuerpo)
         else:
             self._llamar(self.api.post, "/finanzas/clientes-credito", cuerpo)
+
+    # ---------------------------------------------------------- usuarios (HU-18)
+    def _roles(self) -> dict[str, int]:
+        return {r["nombre"]: r["id_rol"] for r in self._llamar(self.api.get, "/admin/roles")}
+
+    def nombres_roles(self) -> list[str]:
+        return list(self._roles())
+
+    def lista_usuarios(self, busqueda: str = "", rol: str = "Todos") -> list[dict]:
+        id_rol = self._roles().get(rol) if rol != "Todos" else None
+        filas = self._llamar(self.api.get, "/admin/usuarios", busqueda=busqueda or None, id_rol=id_rol)
+        return [dict(id=u["id_usuario"], nombre=u["nombre_completo"], usuario=u["usuario"], correo=u["correo"],
+                     rol=u["rol"], activo=u["activo"],
+                     ultimo=datetime.fromisoformat(u["ultimo_acceso"]) if u["ultimo_acceso"] else None) for u in filas]
+
+    def guardar_usuario(self, datos: dict) -> None:
+        id_rol = self._roles().get(datos["rol"])
+        if id_rol is None:
+            raise ErrorNegocio("Elija un rol activo.", "rol")
+        cuerpo = dict(nombre_completo=datos["nombre"], usuario=datos["usuario"], correo=datos["correo"], id_rol=id_rol,
+                      activo=datos.get("activo", True), password=datos.get("password") or None)
+        if datos.get("id"):
+            self._llamar(self.api.put, f"/admin/usuarios/{datos['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/admin/usuarios", cuerpo)
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod
