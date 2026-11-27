@@ -6,7 +6,7 @@ API FastAPI sobre HTTPS en la red local. Es la única puerta a la base de datos.
 - Validación con Pydantic: los filtros de texto solo admiten letras, números y puntuación básica, así que se rechazan comillas y etiquetas (SQLi / XSS). Las consultas son siempre parametrizadas.
 - Reglas de negocio y bitácora de auditoría.
 - Controladores de báscula e impresora de tickets en `app/hardware/` (EC-10).
-- Integración con el proveedor de timbrado CFDI en `app/integrations/`.
+- Integración con el proveedor de timbrado CFDI en `app/integrations/pac.py`. Por SC-05 se usa `PacSimulado`: timbra sin internet ni CSD con el RFC de pruebas del SAT; un PAC real solo tiene que cumplir la interfaz `Pac`.
 
 Estructura: `app/{api,security,schemas,services,repositories}/`, `tests/`, `requirements.txt`. Faltan `app/hardware/` y `app/integrations/`.
 
@@ -63,6 +63,14 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /admin/roles` | `admin` ver | Roles activos |
 | `GET /admin/usuarios` | `admin` ver | Filtros `busqueda` (nombre o usuario) e `id_rol`; nunca devuelve el hash |
 | `POST /admin/usuarios`, `PUT /admin/usuarios/{id}` | `admin` crear / editar | Usuario y correo únicos, contraseña de al menos 8 caracteres guardada con PBKDF2; nadie se da de baja ni se quita el rol de Administrador a sí mismo; una contraseña nueva o una baja cierran las sesiones del usuario (HU-18) |
+| `GET /facturacion/timbres` | `facturacion` ver | Timbres disponibles de los contratados (`FRUTIS_TIMBRES_CONTRATADOS`) |
+| `GET /facturacion/clientes` | `facturacion` ver | Datos fiscales activos con su número de facturas |
+| `POST /facturacion/clientes`, `PUT /facturacion/clientes/{id}` | `facturacion` crear / editar | RFC único y válido, régimen de 3 dígitos, código postal de 5 y correo (HU-32) |
+| `GET /facturacion/tickets/{folio}` | `facturacion` crear | Conceptos del ticket con clave SAT; rechaza tickets ya facturados o con devoluciones |
+| `POST /facturacion/facturas` | `facturacion` crear | Guarda el borrador, lo timbra con el PAC y guarda UUID y XML; un ticket solo tiene una factura vigente; si el PAC no responde: 503 "Sin conexión a internet, no es posible timbrar." y el borrador se reintenta (HU-12a) |
+| `GET /facturacion/facturas`, `GET /facturacion/facturas/{folio}` | `facturacion` ver | Filtros `texto` (folio, RFC o razón social), `desde`, `hasta` y `estatus` |
+| `GET /facturacion/facturas/{folio}/xml` | `facturacion` ver | Descarga del XML timbrado |
+| `POST /facturacion/facturas/{folio}/cancelacion` | `facturacion` editar | Motivo SAT 01 a 04; el 01 exige el folio de una factura vigente que la sustituye (HU-33) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 
