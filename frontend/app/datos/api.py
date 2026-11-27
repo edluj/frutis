@@ -10,16 +10,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import quote
 
+from app import formato
 from app.api_client import ApiClient, ErrorApi, SesionExpirada
 from app.datos import ErrorNegocio, NoConectado
 
 # Ruta que falta en el middleware para cada operación todavía no conectada.
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
-    "dashboard": "/finanzas/dashboard", "lista_gastos": "/finanzas/gastos", "registrar_gasto": "/finanzas/gastos",
-    "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
-    "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
-    "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
     "cajeros": "/reportes", "reporte": "/reportes",
     "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
     "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
@@ -90,6 +87,8 @@ class DatosApi:
         self._administradores: dict[str, str] = {}
         # (folio del ticket, autorización firmada) que dio el Administrador para ese ticket.
         self._autorizacion: tuple[str, str] | None = None
+        # Texto del combo de cajas de cuentas por cobrar -> id_caja.
+        self._cajas_cobro: dict[str, int] = {}
 
     def __getattr__(self, nombre: str):
         if nombre in _RUTAS_PENDIENTES:
@@ -596,6 +595,95 @@ class DatosApi:
     def cancelar_factura(self, folio: str, motivo: str, sustituto: str) -> None:
         self._llamar(self.api.post, f"/facturacion/facturas/{quote(folio)}/cancelacion",
                      dict(motivo=motivo[:2], folio_sustituto=sustituto.strip().upper() or None))
+
+    # ---------------------------------------------------------- cobros a clientes (HU-38b)
+    def cuentas_por_cobrar(self, id_cliente=None, estatus: str = "Pendientes y vencidas") -> dict:
+        hoy, filas = date.today(), []
+        for c in self._llamar(self.api.get, "/finanzas/cuentas-por-cobrar", id_cliente=id_cliente):
+            total, saldo, vence = _dec(c["total"]), _dec(c["saldo"]), date.fromisoformat(c["vence"])
+            if saldo <= 0:
+                est, tono = "Pagada", "verde"
+            elif vence < hoy:
+                est, tono = f"Vencida · {(hoy - vence).days} días", "rojo"
+            elif saldo < total:
+                est, tono = "Pago parcial", "naranja"
+            else:
+                est, tono = "Pendiente", "gris"
+            if estatus == "Pendientes y vencidas" and saldo <= 0 or estatus == "Vencidas" and tono != "rojo":
+                continue
+            if estatus == "Pagadas" and saldo > 0:
+                continue
+            filas.append(dict(ticket=c["ticket"], id_cliente=c["id_cliente"], cliente=c["cliente"],
+                              venta=date.fromisoformat(c["venta"]), vence=vence, total=total, saldo=saldo,
+                              estatus=est, tono=tono))
+        abiertas = [f for f in filas if f["saldo"] > 0]
+        vencidas = [f for f in abiertas if f["tono"] == "rojo"]
+        mes = (hoy.year, hoy.month)
+        flujo = self._llamar(self.api.get, "/finanzas/flujo", anio=mes[0], mes=mes[1])
+        return dict(filas=filas, total=sum((f["saldo"] for f in abiertas), Decimal("0")), ventas=len(abiertas),
+                    clientes=len({f["cliente"] for f in abiertas}), vencido=sum((f["saldo"] for f in vencidas), Decimal("0")),
+                    vencidas=vencidas, cobrado_mes=_dec(flujo["cobros"]), vendido_credito=_dec(flujo["credito"]))
+
+    def cajas_abiertas(self) -> list[str]:
+        self._cajas_cobro = {f"{c['terminal']} · abierta": c["id_caja"]
+                             for c in self._llamar(self.api.get, "/finanzas/cajas-abiertas")}
+        return [*self._cajas_cobro, "Sin caja (no entra al corte)"]
+
+    def registrar_cobro(self, ticket: str, monto: Decimal, metodo: str, caja: str | None) -> Decimal:
+        r = self._llamar(self.api.post, f"/finanzas/cuentas-por-cobrar/{quote(ticket)}/cobros",
+                         dict(monto=str(monto), metodo=metodo, id_caja=self._cajas_cobro.get(caja or "")))
+        return _dec(r["saldo"])
+
+    def estado_cuenta_cliente(self, id_cliente: int, desde: date, hasta: date) -> dict:
+        cli = next(c for c in self.lista_clientes_credito() if c["id"] == id_cliente)
+        movs = [dict(fecha=date.fromisoformat(m["fecha"]), movimiento=m["movimiento"], referencia=m["referencia"],
+                     cargo=_dec(m["cargo"]), abono=_dec(m["abono"]))
+                for m in self._llamar(self.api.get, f"/finanzas/clientes-credito/{id_cliente}/estado-de-cuenta")]
+        inicial = sum((m["cargo"] - m["abono"] for m in movs if m["fecha"] < desde), Decimal("0"))
+        periodo = [m for m in movs if desde <= m["fecha"] <= hasta]
+        saldo = inicial
+        for m in periodo:
+            saldo += m["cargo"] - m["abono"]
+            m["saldo"] = saldo
+        abiertas = [f for f in self.cuentas_por_cobrar(id_cliente)["filas"] if f["saldo"] > 0]
+        return dict(cliente=cli, inicial=inicial, movimientos=periodo, saldo=saldo,
+                    compras=sum((m["cargo"] for m in periodo), Decimal("0")),
+                    pagos=sum((m["abono"] for m in periodo), Decimal("0")),
+                    n_compras=sum(1 for m in periodo if m["cargo"]), n_pagos=sum(1 for m in periodo if m["abono"]),
+                    disponible=cli["limite"] - cli["debe"], vence=min((f["vence"] for f in abiertas), default=None),
+                    estatus=cli["estatus_vista"])
+
+    # ---------------------------------------------------------- gastos (HU-26)
+    def lista_gastos(self, concepto: str = "Todos", desde=None, hasta=None) -> dict:
+        filas = [dict(fecha=date.fromisoformat(g["fecha"]), concepto=g["concepto"], detalle=g["detalle"],
+                      metodo=g["metodo"], monto=_dec(g["monto"]), comprobante=g["comprobante"], usuario=g["usuario"])
+                 for g in self._llamar(self.api.get, "/finanzas/gastos",
+                                       concepto=None if concepto == "Todos" else concepto,
+                                       desde=desde.isoformat() if desde else None, hasta=hasta.isoformat() if hasta else None)]
+        return dict(filas=filas, total=sum((g["monto"] for g in filas), Decimal("0")))
+
+    def registrar_gasto(self, datos: dict) -> None:
+        # El servidor todavía no recibe archivos: el comprobante se queda en la terminal.
+        self._llamar(self.api.post, "/finanzas/gastos", dict(
+            fecha=datos["fecha"].isoformat(), concepto=datos["concepto"], detalle=datos.get("detalle") or None,
+            metodo=datos["metodo"], monto=str(datos["monto"])))
+
+    # ---------------------------------------------------------- dashboard y flujo (HU-27, HU-37)
+    def dashboard(self, periodo: str) -> dict:
+        anio, mes = formato.periodo_a_mes(periodo)
+        d = self._llamar(self.api.get, "/finanzas/dashboard", anio=anio, mes=mes)
+        return dict({k: _dec(d[k]) for k in ("ingresos", "compras", "gastos", "egresos", "utilidad", "margen",
+                                              "margen_anterior")},
+                    tickets=d["tickets"],
+                    semanas=[(s["semana"], float(s["ingresos"]), float(s["egresos"])) for s in d["semanas"]],
+                    conceptos=[dict(concepto=c["concepto"], importe=_dec(c["importe"]), pct=_dec(c["pct"]))
+                               for c in d["conceptos"]])
+
+    def flujo(self, periodo: str) -> dict:
+        anio, mes = formato.periodo_a_mes(periodo)
+        f = self._llamar(self.api.get, "/finanzas/flujo", anio=anio, mes=mes)
+        return dict({k: _dec(f[k]) for k in ("inicial", "ventas", "cobros", "pagos_proveedores", "gastos", "credito")},
+                    semanas=[(s["semana"], _dec(s["entradas"]), _dec(s["salidas"])) for s in f["semanas"]])
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod

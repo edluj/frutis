@@ -68,6 +68,13 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /compras/proveedores/{id}/estado-de-cuenta` | `compras` ver | Compras y pagos del proveedor; los lotes de contado se pagan el mismo día |
 | `GET /finanzas/clientes-credito` | `finanzas` ver | Filtros `busqueda` y `estatus` (`activos`, `suspendidos`, `todos`); lo que debe cada cliente y si tiene una cuenta vencida |
 | `POST /finanzas/clientes-credito`, `PUT /finanzas/clientes-credito/{id}` | `finanzas` crear / editar | Límite mayor a 0 y días de crédito obligatorios; un cliente suspendido no compra a crédito (HU-39) |
+| `GET /finanzas/cuentas-por-cobrar` | `finanzas` ver | Ventas a crédito con vencimiento y saldo; filtro `id_cliente` |
+| `GET /finanzas/cajas-abiertas` | `finanzas` crear | Turnos donde puede entrar un cobro en efectivo |
+| `POST /finanzas/cuentas-por-cobrar/{ticket}/cobros` | `finanzas` crear | Abono con `sp_registrar_cobro`; en efectivo, con `id_caja`, entra al corte de ese turno (HU-38b) |
+| `GET /finanzas/clientes-credito/{id}/estado-de-cuenta` | `finanzas` ver | Compras a crédito, cobros y devoluciones abonadas al crédito |
+| `GET /finanzas/gastos`, `POST /finanzas/gastos` | `finanzas` ver / crear | Gastos operativos por concepto y fechas; el detalle se guarda junto al concepto (HU-26) |
+| `GET /finanzas/dashboard` | `finanzas` ver | `anio` y `mes`; ingresos = ventas − devoluciones; egresos = compras recibidas + gastos; por semana y por concepto (HU-27) |
+| `GET /finanzas/flujo` | `finanzas` ver | `anio` y `mes`; en efectivo: ventas cobradas y cobros contra pagos a proveedores (incluye lotes de contado) y gastos; saldo inicial acumulado (HU-37) |
 | `GET /admin/roles` | `admin` ver | Roles activos |
 | `GET /admin/usuarios` | `admin` ver | Filtros `busqueda` (nombre o usuario) e `id_rol`; nunca devuelve el hash |
 | `POST /admin/usuarios`, `PUT /admin/usuarios/{id}` | `admin` crear / editar | Usuario y correo únicos, contraseña de al menos 8 caracteres guardada con PBKDF2; nadie se da de baja ni se quita el rol de Administrador a sí mismo; una contraseña nueva o una baja cierran las sesiones del usuario (HU-18) |

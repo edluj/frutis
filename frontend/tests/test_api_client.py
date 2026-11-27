@@ -83,10 +83,14 @@ def test_caja_cerrada_devuelve_none():
 
 
 def test_rutas_que_faltan_en_el_middleware():
+    from app.datos.api import _RUTAS_PENDIENTES
+    if not _RUTAS_PENDIENTES:
+        pytest.skip("todas las operaciones ya tienen ruta en el middleware")
+    nombre, ruta = next(iter(_RUTAS_PENDIENTES.items()))
     datos = DatosApi(cliente(lambda req: httpx.Response(200, json={})), "POS-1")
     with pytest.raises(NoConectado) as exc:
-        datos.lista_gastos()
-    assert exc.value.ruta == "/finanzas/gastos"
+        getattr(datos, nombre)()
+    assert exc.value.ruta == ruta
 
 
 def test_certificado_no_valido_da_mensaje_claro():
