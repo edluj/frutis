@@ -37,6 +37,7 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /pos/cajas/actual` | `pos` ver | Caja abierta del usuario |
 | `POST /pos/cajas` | `pos` crear | Apertura con `sp_abrir_caja`: terminal y fondo inicial; una caja abierta por terminal y por cajero (HU-15) |
 | `POST /pos/ventas` | `pos` crear | Cobro con `sp_registrar_venta`; el cajero sale del token |
+| `GET /pos/clientes-credito` | `pos` crear | Clientes de crédito activos con lo que deben, su disponible y el vencimiento de una venta de hoy (HU-38a) |
 | `GET /pos/ventas/{folio}` | `pos` ver | Ticket con sus productos y lo ya devuelto |
 | `GET /pos/cortes/actual` | `pos` ver | Resumen del turno abierto: ventas por método, cobros y devoluciones en efectivo, efectivo esperado (HU-09) |
 | `GET /pos/cortes/ultimo` | `pos` ver | Último corte de una terminal (`terminal=POS-01`) |
@@ -57,6 +58,8 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /compras/lotes/siguiente-folio` | `compras` crear | Folio que probablemente tendrá el próximo lote |
 | `GET /compras/lotes/{folio}` | `compras` ver | Productos con recibido, vendido, merma y existencia; mermas y cuenta por pagar |
 | `POST /compras/lotes` | `compras` crear | En una transacción: lote, existencia por producto, costo vigente y, si `dias_credito` > 0, la cuenta por pagar (HU-11) |
+| `GET /finanzas/clientes-credito` | `finanzas` ver | Filtros `busqueda` y `estatus` (`activos`, `suspendidos`, `todos`); lo que debe cada cliente y si tiene una cuenta vencida |
+| `POST /finanzas/clientes-credito`, `PUT /finanzas/clientes-credito/{id}` | `finanzas` crear / editar | Límite mayor a 0 y días de crédito obligatorios; un cliente suspendido no compra a crédito (HU-39) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 

@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 ## [Sin publicar]
 
 ### Agregado
+- Clientes de crédito y venta a crédito de punta a punta (HU-39, HU-38a): rutas `/finanzas/clientes-credito` para darlos de alta, editarlos y suspenderlos, y `/pos/clientes-credito` para que el cajero elija al cliente en el cobro con su disponible.
 - Mermas por lote de punta a punta (HU-17): rutas `/inventario/mermas` y `/inventario/productos/{id}/lotes`; la merma descuenta del lote y guarda su costo. Motivo "Plaga u hongo" en la base (`database/migraciones/004_mermas_motivo_plaga.sql`). El resumen de la pantalla muestra el mes actual.
 - Compras conectado de punta a punta (HU-23, HU-11): rutas `/compras/proveedores` y `/compras/lotes`; registrar un lote suma la existencia por producto, actualiza el costo vigente y, a crédito, crea la cuenta por pagar en la misma transacción. Las pantallas de proveedores, registrar lote, lotes y detalle de lote ya usan el servidor.
 - Columnas `proveedores.direccion` y `lotes_compras.factura_proveedor`, que capturan las pantallas; bases instaladas: `database/migraciones/003_compras_direccion_factura.sql`.

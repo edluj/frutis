@@ -1,6 +1,6 @@
 """Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
 /compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, mermas, proveedores y lotes de compra.
+productos, mermas, proveedores, lotes de compra y clientes de crédito.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -15,7 +15,6 @@ from app.datos import ErrorNegocio, NoConectado
 # Ruta que falta en el middleware para cada operación todavía no conectada.
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
-    "clientes_credito_pos": "/finanzas/clientes-credito",
     "cuentas_por_pagar": "/compras/cuentas-por-pagar", "pagar_lote": "/compras/cuentas-por-pagar",
     "estado_cuenta_proveedor": "/compras/proveedores/{id}/estado-de-cuenta",
     "timbres_disponibles": "/facturacion", "ticket_para_factura": "/facturacion",
@@ -23,8 +22,7 @@ _RUTAS_PENDIENTES = {
     "timbrar": "/facturacion/facturas", "detalle_factura": "/facturacion/facturas",
     "lista_facturas": "/facturacion/facturas", "cancelar_factura": "/facturacion/facturas",
     "dashboard": "/finanzas/dashboard", "lista_gastos": "/finanzas/gastos", "registrar_gasto": "/finanzas/gastos",
-    "flujo": "/finanzas/flujo", "lista_clientes_credito": "/finanzas/clientes-credito",
-    "guardar_cliente_credito": "/finanzas/clientes-credito", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
+    "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
     "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
     "existencias": "/inventario/existencias",
@@ -64,6 +62,10 @@ def _estatus_cxp(saldo: Decimal, vence: date | None) -> tuple[str, str]:
     if dias <= 3:
         return (f"Vence en {dias} días" if dias != 1 else "Vence mañana"), "naranja"
     return "Pendiente", "gris"
+
+
+# Estatus de los clientes de crédito (FIN-04).
+FILTRO_CLIENTES = {"Activo": "activos", "Pago vencido": "activos", "Suspendido": "suspendidos"}
 
 
 # Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
@@ -355,6 +357,36 @@ class DatosApi:
             id_producto=id_producto, folio_lote=lote, cantidad=str(cantidad),
             motivo=MOTIVO_DE_PANTALLA.get(motivo, "otro"), observaciones=obs or None))
         return _dec(r["costo"])
+
+    # ---------------------------------------------------------- crédito (HU-39, HU-38a)
+    def clientes_credito_pos(self) -> list[dict]:
+        return [dict(id=c["id_cliente_credito"], nombre=c["nombre"], limite=_dec(c["limite_credito"]), debe=_dec(c["debe"]),
+                     disponible=_dec(c["disponible"]), dias=c["dias_credito"], vence=date.fromisoformat(c["vence"]),
+                     vencido=c["vencido"]) for c in self._llamar(self.api.get, "/pos/clientes-credito")]
+
+    def lista_clientes_credito(self, busqueda: str = "", estatus: str = "Todos") -> list[dict]:
+        filas = self._llamar(self.api.get, "/finanzas/clientes-credito", busqueda=busqueda or None,
+                             estatus=FILTRO_CLIENTES.get(estatus, "todos"))
+        salida = []
+        for c in filas:
+            limite, debe = _dec(c["limite_credito"]), _dec(c["debe"])
+            base = "Activo" if c["activo"] else "Suspendido"
+            vista = "Pago vencido" if c["activo"] and c["vencido"] else base
+            if estatus not in ("Todos", vista):
+                continue
+            salida.append(dict(id=c["id_cliente_credito"], nombre=c["nombre"], telefono=c["telefono"], limite=limite,
+                               dias=c["dias_credito"], estatus=base, fiscal=c["rfc_fiscal"], debe=debe,
+                               uso=float(debe / limite) if limite else 0, estatus_vista=vista))
+        return salida
+
+    def guardar_cliente_credito(self, datos: dict) -> None:
+        cuerpo = dict(nombre=datos["nombre"], telefono=datos["telefono"], limite_credito=str(datos["limite"]),
+                      dias_credito=datos["dias"], rfc_fiscal=datos.get("fiscal") or None,
+                      activo=datos.get("estatus", "Activo") != "Suspendido")
+        if datos.get("id"):
+            self._llamar(self.api.put, f"/finanzas/clientes-credito/{datos['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/finanzas/clientes-credito", cuerpo)
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod
