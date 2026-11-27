@@ -57,7 +57,7 @@ Las vistas nunca llaman a la red: piden datos a un objeto `datos` (`DatosApi` o 
 
 ## Pantallas y estado de conexión
 
-Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario`, `/compras` y `/finanzas` (ver `middleware/README.md`). Con el servidor ya funcionan el login, el menú por rol y todo el Punto de Venta: apertura, cobro, corte y devoluciones, además de categorías, productos, mermas, proveedores, lotes de compra y clientes de crédito. La caja de la apertura es la terminal de `FRUTIS_TERMINAL`. Las demás pantallas muestran un aviso con la ruta que falta en lugar de inventar datos; en modo demostración se pueden recorrer todas.
+Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario`, `/compras`, `/finanzas` y `/admin` (ver `middleware/README.md`). Con el servidor ya funcionan el login, el menú por rol y todo el Punto de Venta: apertura, cobro, corte y devoluciones, además de categorías, productos, mermas, proveedores, lotes de compra, clientes de crédito y usuarios. La caja de la apertura es la terminal de `FRUTIS_TERMINAL`. Las demás pantallas muestran un aviso con la ruta que falta en lugar de inventar datos; en modo demostración se pueden recorrer todas.
 
 | Módulo | Pantallas (código del diseño) | Historias | Ruta que falta en el middleware |
 | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario`, `/compras` y 
 | Finanzas | Dashboard, Gastos, Flujo, Clientes de crédito, Cuentas por cobrar, Estado de cuenta (FIN-01 a 06) | HU-26, 27, 37, 38b, 39 | Clientes de crédito (FIN-04) ya conectados. Faltan `/finanzas/dashboard`, `/finanzas/gastos`, `/finanzas/flujo`, `/finanzas/cuentas-por-cobrar` y `/finanzas/cobros` |
 | Catálogo e Inventario | Categorías, Productos, Existencias, Lotes y caducidades, Movimientos, Ajuste e historial de precios, Mermas (CAT-01 a 08) | HU-10, 17, 22, 24, 31 | Categorías, productos y mermas (CAT-01, CAT-02, CAT-08) ya conectados. Faltan `/inventario/existencias`, `/inventario/lotes`, `/inventario/movimientos` y `/inventario/precios` |
 | Reportes | 12 reportes con exportación PDF y Excel (REP-01) | HU-28, 29 | `/reportes` |
-| Administración | Usuarios, Roles y permisos, Auditoría, Cajas y dispositivos (ADM-01 a 04) | HU-18, 34, 35, 41 | `/admin/...` |
+| Administración | Usuarios, Roles y permisos, Auditoría, Cajas y dispositivos (ADM-01 a 04) | HU-18, 34, 35, 41 | Usuarios (ADM-01) ya conectado. Faltan los permisos por rol, la auditoría y las cajas (`/admin/roles/...`, `/admin/auditoria`, `/admin/cajas`, `/admin/metodos-pago`, `/admin/dispositivos`) |
 
 ## Pendientes
 
