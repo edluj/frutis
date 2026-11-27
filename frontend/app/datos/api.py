@@ -1,6 +1,7 @@
 """Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
 /compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, mermas, proveedores, lotes de compra, clientes de crédito y usuarios.
+productos, mermas, proveedores, lotes de compra, clientes de crédito, usuarios y facturación
+(con el PAC simulado de SC-05).
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -17,10 +18,6 @@ _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
     "cuentas_por_pagar": "/compras/cuentas-por-pagar", "pagar_lote": "/compras/cuentas-por-pagar",
     "estado_cuenta_proveedor": "/compras/proveedores/{id}/estado-de-cuenta",
-    "timbres_disponibles": "/facturacion", "ticket_para_factura": "/facturacion",
-    "lista_clientes_fiscales": "/facturacion/clientes", "guardar_cliente_fiscal": "/facturacion/clientes",
-    "timbrar": "/facturacion/facturas", "detalle_factura": "/facturacion/facturas",
-    "lista_facturas": "/facturacion/facturas", "cancelar_factura": "/facturacion/facturas",
     "dashboard": "/finanzas/dashboard", "lista_gastos": "/finanzas/gastos", "registrar_gasto": "/finanzas/gastos",
     "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
     "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
@@ -411,6 +408,63 @@ class DatosApi:
             self._llamar(self.api.put, f"/admin/usuarios/{datos['id']}", cuerpo)
         else:
             self._llamar(self.api.post, "/admin/usuarios", cuerpo)
+
+    # ---------------------------------------------------------- facturación (HU-32, HU-12a, HU-33)
+    def timbres_disponibles(self) -> tuple[int, int]:
+        t = self._llamar(self.api.get, "/facturacion/timbres")
+        return t["disponibles"], t["contratados"]
+
+    @staticmethod
+    def _concepto_de(c: dict) -> dict:
+        return dict(nombre=c["nombre"], unidad=c["unidad_venta"], cantidad=_dec(c["cantidad"]),
+                    precio=_dec(c["precio_unitario"]), importe=_dec(c["importe"]), clave_sat=c["clave_sat"])
+
+    def ticket_para_factura(self, folio: str) -> dict:
+        t = self._llamar(self.api.get, f"/facturacion/tickets/{quote(folio)}")
+        return dict(folio=t["folio"], total=_dec(t["total"]), metodo=t["metodo"],
+                    renglones=[self._concepto_de(c) for c in t["conceptos"]])
+
+    def lista_clientes_fiscales(self, busqueda: str = "") -> list[dict]:
+        return [dict(id=c["id_cliente"], rfc=c["rfc"], razon_social=c["razon_social"], regimen=c["regimen_fiscal"],
+                     cp=c["codigo_postal"], correo=c["correo"], facturas=c["facturas"])
+                for c in self._llamar(self.api.get, "/facturacion/clientes", busqueda=busqueda or None)]
+
+    def guardar_cliente_fiscal(self, datos: dict, original: str | None = None) -> None:
+        cuerpo = dict(rfc=datos["rfc"], razon_social=datos["razon_social"], regimen_fiscal=datos["regimen"],
+                      codigo_postal=datos["cp"], correo=datos["correo"])
+        actual = next((c for c in self.lista_clientes_fiscales(original) if c["rfc"] == original), None) if original else None
+        if actual:
+            self._llamar(self.api.put, f"/facturacion/clientes/{actual['id']}", cuerpo)
+        else:
+            self._llamar(self.api.post, "/facturacion/clientes", cuerpo)
+
+    def _factura_de(self, f: dict) -> dict:
+        timbrado = datetime.fromisoformat(f["fecha_timbrado"]) if f["fecha_timbrado"] else None
+        return dict(folio=f["folio"], fecha=timbrado.date() if timbrado else date.today(), timbrado=timbrado,
+                    rfc=f["rfc"], uuid=f["uuid"] or "", total=_dec(f["total"]), estatus=f["estatus"],
+                    ticket=f["folio_venta"], uso=f["uso_cfdi"], forma=f["forma_pago"], metodo_pago=f["metodo_pago"],
+                    correo=f["correo"], cliente=dict(razon_social=f["razon_social"], rfc=f["rfc"], cp=f["codigo_postal"],
+                                                     correo=f["correo"]),
+                    renglones=[self._concepto_de(c) for c in f["conceptos"]])
+
+    def timbrar(self, datos: dict) -> dict:
+        cuerpo = dict(folio_venta=datos["ticket"], rfc=datos["rfc"], regimen_fiscal=datos["regimen"],
+                      codigo_postal=datos["cp"], uso_cfdi=datos["uso"], forma_pago=datos["forma"],
+                      metodo_pago=datos["metodo_pago"], correo=datos["correo"])
+        return self._factura_de(self._llamar(self.api.post, "/facturacion/facturas", cuerpo))
+
+    def detalle_factura(self, folio: str) -> dict:
+        return self._factura_de(self._llamar(self.api.get, f"/facturacion/facturas/{quote(folio)}"))
+
+    def lista_facturas(self, texto: str = "", desde=None, hasta=None, estatus: str = "Todas") -> list[dict]:
+        filas = self._llamar(self.api.get, "/facturacion/facturas", texto=texto or None,
+                             desde=desde.isoformat() if desde else None, hasta=hasta.isoformat() if hasta else None,
+                             estatus=estatus.rstrip("s") if estatus != "Todas" else "Todas")
+        return [dict(self._factura_de(f), cliente=f["razon_social"]) for f in filas]
+
+    def cancelar_factura(self, folio: str, motivo: str, sustituto: str) -> None:
+        self._llamar(self.api.post, f"/facturacion/facturas/{quote(folio)}/cancelacion",
+                     dict(motivo=motivo[:2], folio_sustituto=sustituto.strip().upper() or None))
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod
