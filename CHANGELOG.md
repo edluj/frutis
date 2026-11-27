@@ -8,6 +8,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 - Inventario completo (HU-24, HU-31): existencias con valor y días de alcance, lotes por caducar, movimientos por producto (entradas, ventas, mermas y devoluciones) y ajuste masivo de precios con historial.
 - Cuentas por pagar (HU-25): lista con vencimientos, abonos con Transferencia, Efectivo o Cheque que quedan como egreso, y estado de cuenta del proveedor. Método "Cheque" inactivo para el POS (`database/migraciones/005_metodo_cheque.sql`).
 - Finanzas completo (HU-38b, HU-26, HU-27, HU-37): cuentas por cobrar con cobros que entran al corte de la caja, estado de cuenta del cliente, gastos operativos, dashboard de ingresos contra egresos y flujo de efectivo calculados del mes elegido. Las pantallas de dashboard y flujo ofrecen los meses recientes en lugar de octubre fijo.
+- Administración completa (HU-34, HU-35, HU-41): roles nuevos y su matriz de permisos (sin necesitar `DELETE`), bitácora con filtros y textos legibles, terminales que han abierto caja y activación de métodos de pago.
 
 ## [1.0.1] - 2026-11-27
 

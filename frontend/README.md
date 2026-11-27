@@ -83,7 +83,7 @@ Hoy el middleware expone `/auth`, `/pos` y parte de `/inventario`, `/compras`, `
 | Finanzas | Dashboard, Gastos, Flujo, Clientes de crédito, Cuentas por cobrar, Estado de cuenta (FIN-01 a 06) | HU-26, 27, 37, 38b, 39 | Ninguna: las 6 pantallas usan el servidor; el comprobante de un gasto todavía no se sube |
 | Catálogo e Inventario | Categorías, Productos, Existencias, Lotes y caducidades, Movimientos, Ajuste e historial de precios, Mermas (CAT-01 a 08) | HU-10, 17, 22, 24, 31 | Ninguna: las 8 pantallas usan el servidor; la vista previa del ajuste de precios se calcula en la pantalla |
 | Reportes | 12 reportes con exportación PDF y Excel (REP-01) | HU-28, 29 | `/reportes` |
-| Administración | Usuarios, Roles y permisos, Auditoría, Cajas y dispositivos (ADM-01 a 04) | HU-18, 34, 35, 41 | Usuarios (ADM-01) ya conectado. Faltan los permisos por rol, la auditoría y las cajas (`/admin/roles/...`, `/admin/auditoria`, `/admin/cajas`, `/admin/metodos-pago`, `/admin/dispositivos`) |
+| Administración | Usuarios, Roles y permisos, Auditoría, Cajas y dispositivos (ADM-01 a 04) | HU-18, 34, 35, 41 | Ninguna. Los permisos especiales se calculan (crédito = cobrar en el POS; devoluciones y cortes, del Administrador); las terminales se registran al abrir caja, y báscula e impresora usan el simulador (SC-05) |
 
 ## Pendientes
 

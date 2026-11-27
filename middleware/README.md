@@ -75,9 +75,14 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /finanzas/gastos`, `POST /finanzas/gastos` | `finanzas` ver / crear | Gastos operativos por concepto y fechas; el detalle se guarda junto al concepto (HU-26) |
 | `GET /finanzas/dashboard` | `finanzas` ver | `anio` y `mes`; ingresos = ventas − devoluciones; egresos = compras recibidas + gastos; por semana y por concepto (HU-27) |
 | `GET /finanzas/flujo` | `finanzas` ver | `anio` y `mes`; en efectivo: ventas cobradas y cobros contra pagos a proveedores (incluye lotes de contado) y gastos; saldo inicial acumulado (HU-37) |
-| `GET /admin/roles` | `admin` ver | Roles activos |
+| `GET /admin/roles` | `admin` ver | Roles activos con su número de usuarios |
 | `GET /admin/usuarios` | `admin` ver | Filtros `busqueda` (nombre o usuario) e `id_rol`; nunca devuelve el hash |
 | `POST /admin/usuarios`, `PUT /admin/usuarios/{id}` | `admin` crear / editar | Usuario y correo únicos, contraseña de al menos 8 caracteres guardada con PBKDF2; nadie se da de baja ni se quita el rol de Administrador a sí mismo; una contraseña nueva o una baja cierran las sesiones del usuario (HU-18) |
+| `POST /admin/roles` | `admin` crear | Rol nuevo, sin permisos; nombre único |
+| `GET /admin/roles/{id}/permisos`, `PUT /admin/roles/{id}/permisos` | `admin` ver / editar | Matriz ver/crear/editar/eliminar por módulo; el rol Administrador no se edita; un módulo que no viene queda sin permisos (sin `DELETE`) (HU-34) |
+| `GET /admin/auditoria` | `admin` ver | Filtros `usuario`, `modulo`, `accion`, `desde` y `hasta`; solo lectura (HU-35) |
+| `GET /admin/cajas` | `admin` ver | Terminales que han abierto caja, con su estado |
+| `GET /admin/metodos-pago`, `PUT /admin/metodos-pago/{id}` | `admin` ver / editar | Activar o desactivar métodos de pago; el efectivo no se desactiva (HU-41) |
 | `GET /facturacion/timbres` | `facturacion` ver | Timbres disponibles de los contratados (`FRUTIS_TIMBRES_CONTRATADOS`) |
 | `GET /facturacion/clientes` | `facturacion` ver | Datos fiscales activos con su número de facturas |
 | `POST /facturacion/clientes`, `PUT /facturacion/clientes/{id}` | `facturacion` crear / editar | RFC único y válido, régimen de 3 dígitos, código postal de 5 y correo (HU-32) |

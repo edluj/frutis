@@ -18,9 +18,6 @@ from app.datos import ErrorNegocio, NoConectado
 _RUTAS_PENDIENTES = {
     "resumen_inicio": "/reportes/resumen-del-dia",
     "cajeros": "/reportes", "reporte": "/reportes",
-    "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
-    "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
-    "activar_metodo": "/admin/metodos-pago", "guardar_dispositivos": "/admin/dispositivos",
 }
 
 
@@ -53,6 +50,33 @@ def _estatus_cxp(saldo: Decimal, vence: date | None) -> tuple[str, str]:
 
 # Estatus de los clientes de crédito (FIN-04).
 FILTRO_CLIENTES = {"Activo": "activos", "Pago vencido": "activos", "Suspendido": "suspendidos"}
+
+
+# Bitácora (ADM-03): códigos del middleware -> texto de pantalla.
+MODULOS_AUDITORIA = {"auth": "Acceso", "pos": "Punto de Venta", "inventario": "Catálogo e Inventario",
+                     "compras": "Proveedores y Compras", "finanzas": "Finanzas", "facturacion": "Facturación",
+                     "admin": "Administración", "reportes": "Reportes"}
+ACCIONES_AUDITORIA = {
+    "login": "Inicio de sesión", "logout": "Cierre de sesión", "login_fallido": "Inicio de sesión fallido",
+    "login_bloqueado": "Cuenta bloqueada", "login_inactivo": "Usuario inactivo", "venta": "Venta",
+    "venta_rechazada": "Venta rechazada", "apertura": "Apertura de caja", "corte": "Corte de caja",
+    "devolucion": "Devolución", "autorizacion_devolucion": "Devolución autorizada",
+    "categoria_alta": "Categoría registrada", "categoria_edicion": "Categoría editada",
+    "producto_alta": "Producto registrado", "producto_edicion": "Producto editado", "merma_alta": "Merma registrada",
+    "ajuste_precios": "Ajuste de precios", "proveedor_alta": "Proveedor registrado", "proveedor_edicion": "Proveedor editado",
+    "lote_alta": "Lote registrado", "pago_proveedor": "Pago a proveedor", "cliente_credito_alta": "Cliente de crédito registrado",
+    "cliente_credito_edicion": "Cliente de crédito editado", "cobro": "Cobro registrado", "gasto": "Gasto registrado",
+    "cliente_fiscal_alta": "Cliente fiscal registrado", "cliente_fiscal_edicion": "Cliente fiscal editado",
+    "factura_borrador": "Factura en borrador", "factura_timbrada": "Timbrado", "factura_cancelada": "Factura cancelada",
+    "usuario_alta": "Usuario registrado", "usuario_edicion": "Usuario editado", "usuario_baja": "Usuario desactivado",
+    "rol_alta": "Rol creado", "permisos_edicion": "Permisos actualizados", "metodo_activado": "Método de pago activado",
+    "metodo_desactivado": "Método de pago desactivado",
+}
+ACCIONES_ROJAS = ("fallido", "bloqueado", "inactivo", "rechazada", "cancelada", "baja", "desactivado")
+ROL_ADMINISTRADOR = "Administrador"
+SIN_CATALOGO_CAJAS = ("Las terminales se registran solas: una caja aparece aquí cuando alguien la abre con el nombre de "
+                      "terminal de su frutis.ini (terminal = POS-02).")
+SIN_DISPOSITIVOS = "La báscula y la impresora usan el simulador: el hardware real quedó fuera del alcance (SC-05)."
 
 
 # Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
@@ -684,6 +708,65 @@ class DatosApi:
         f = self._llamar(self.api.get, "/finanzas/flujo", anio=anio, mes=mes)
         return dict({k: _dec(f[k]) for k in ("inicial", "ventas", "cobros", "pagos_proveedores", "gastos", "credito")},
                     semanas=[(s["semana"], _dec(s["entradas"]), _dec(s["salidas"])) for s in f["semanas"]])
+
+    # ---------------------------------------------------------- roles y permisos (HU-34)
+    def roles(self) -> list[dict]:
+        return [dict(nombre=r["nombre"], usuarios=r["usuarios"], fijo=r["es_sistema"], id_rol=r["id_rol"])
+                for r in self._llamar(self.api.get, "/admin/roles")]
+
+    def _id_rol(self, nombre: str) -> int:
+        return next(r["id_rol"] for r in self.roles() if r["nombre"] == nombre)
+
+    def permisos_de(self, rol: str) -> dict:
+        filas = {p["modulo"]: p for p in self._llamar(self.api.get, f"/admin/roles/{self._id_rol(rol)}/permisos")}
+        matriz = {m: tuple(int(bool(filas.get(m, {}).get(f"puede_{a}"))) for a in ("ver", "crear", "editar", "eliminar"))
+                  for m in ("pos", "compras", "facturacion", "finanzas", "inventario", "reportes", "admin")}
+        # No se guardan aparte: el crédito sale del permiso de cobrar y las devoluciones y el corte de
+        # todas las cajas son del Administrador (SC-02).
+        es_admin = rol == ROL_ADMINISTRADOR
+        return dict(matriz=matriz, especiales=dict(credito=bool(matriz["pos"][1]), devoluciones=es_admin, cortes=es_admin))
+
+    def guardar_permisos(self, rol: str, matriz: dict, especiales: dict) -> None:
+        permisos = [dict(modulo=m, puede_ver=bool(v[0]), puede_crear=bool(v[1]), puede_editar=bool(v[2]),
+                         puede_eliminar=bool(v[3])) for m, v in matriz.items() if any(v)]
+        self._llamar(self.api.put, f"/admin/roles/{self._id_rol(rol)}/permisos", dict(permisos=permisos))
+
+    def crear_rol(self, nombre: str) -> None:
+        self._llamar(self.api.post, "/admin/roles", dict(nombre=nombre))
+
+    # ---------------------------------------------------------- bitácora (HU-35)
+    def lista_auditoria(self, usuario="Todos", modulo="Todos", accion="Todas", desde=None, hasta=None) -> list[dict]:
+        salida = []
+        for a in self._llamar(self.api.get, "/admin/auditoria", desde=desde.isoformat() if desde else None,
+                              hasta=hasta.isoformat() if hasta else None):
+            fila = dict(fecha=datetime.fromisoformat(a["fecha"]), usuario=a["usuario"] or "—",
+                        modulo=MODULOS_AUDITORIA.get(a["modulo"], a["modulo"]),
+                        accion=ACCIONES_AUDITORIA.get(a["accion"], a["accion"].replace("_", " ").capitalize()),
+                        detalle=a["detalle"] or "", ip=a["ip"] or "—",
+                        tono="rojo" if a["accion"].endswith(ACCIONES_ROJAS) else "gris")
+            if (usuario in ("Todos", fila["usuario"]) and modulo in ("Todos", fila["modulo"])
+                    and accion in ("Todas", fila["accion"])):
+                salida.append(fila)
+        return salida
+
+    # ---------------------------------------------------------- cajas y métodos de pago (HU-41)
+    def configuracion_cajas(self) -> dict:
+        cajas = [dict(nombre=f"Caja {t['terminal']}", corto=t["terminal"], terminal=t["terminal"], ip="—",
+                      estado=f"Abierta · {t['cajero']}" if t["abierta"] else "Cerrada", abierta=bool(t["abierta"]))
+                 for t in self._llamar(self.api.get, "/admin/cajas")]
+        metodos = [dict(m) for m in self._llamar(self.api.get, "/admin/metodos-pago")]
+        simulador = "Simulador (SC-05)"
+        return dict(cajas=cajas, metodos=metodos, dispositivos=dict(bascula_modelo=simulador, impresora_modelo=simulador,
+                                                                    lector="Teclado", papel="80 mm", puerto="—"))
+
+    def agregar_caja(self, nombre: str, terminal: str, ip: str) -> None:
+        raise ErrorNegocio(SIN_CATALOGO_CAJAS)
+
+    def activar_metodo(self, id_metodo: int, activo: bool) -> None:
+        self._llamar(self.api.put, f"/admin/metodos-pago/{id_metodo}", dict(activo=activo))
+
+    def guardar_dispositivos(self, datos: dict) -> None:
+        raise ErrorNegocio(SIN_DISPOSITIVOS)
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod
