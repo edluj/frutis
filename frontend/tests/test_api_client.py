@@ -4,7 +4,7 @@ import pytest
 
 from app.api_client import ApiClient, ErrorApi, SesionExpirada
 from app.config import Config
-from app.datos import ErrorNegocio, NoConectado
+from app.datos import ErrorNegocio
 from app.datos.api import DatosApi
 
 CFG = Config(api_url="http://middleware.test", ca_path=None, terminal="POS-1", demo=False, timeout=2)
@@ -81,12 +81,6 @@ def test_caja_cerrada_devuelve_none():
     datos = DatosApi(cliente(lambda req: httpx.Response(404, json={"detail": "No hay una caja abierta."})), "POS-1")
     assert datos.caja_actual() is None
 
-
-def test_rutas_que_faltan_en_el_middleware():
-    datos = DatosApi(cliente(lambda req: httpx.Response(200, json={})), "POS-1")
-    with pytest.raises(NoConectado) as exc:
-        datos.lista_gastos()
-    assert exc.value.ruta == "/finanzas/gastos"
 
 
 def test_certificado_no_valido_da_mensaje_claro():

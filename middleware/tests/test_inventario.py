@@ -231,3 +231,60 @@ def test_lista_de_mermas_filtra_por_motivo(cliente, compras, monkeypatch):
     monkeypatch.setattr(repo, "listar_mermas", lambda c, m, d, h: recibido.update(motivo=m) or [])
     assert cliente.get("/inventario/mermas", params={"motivo": "plaga"}, headers=compras).status_code == 200
     assert recibido == {"motivo": "plaga"}
+
+
+# ---------------------------------------------------------------- existencias, movimientos y precios (HU-24, HU-31)
+
+def test_existencias_lotes_y_movimientos_solo_con_permiso_de_ver(cliente, compras, monkeypatch):
+    monkeypatch.setattr(usuarios, "permisos_del_rol", lambda c, r: [])
+    for ruta in ("/inventario/existencias", "/inventario/lotes", "/inventario/productos/1/movimientos",
+                 "/inventario/productos/1/precios"):
+        assert cliente.get(ruta, headers=compras).status_code == 403
+
+
+def test_lotes_por_caducar_pasa_los_filtros(cliente, compras, monkeypatch):
+    recibido = {}
+    monkeypatch.setattr(repo, "lotes_por_caducar", lambda c, d, p, pr: recibido.update(dias=d, producto=p, proveedor=pr) or [])
+    assert cliente.get("/inventario/lotes", params={"dias": 3, "id_producto": 1}, headers=compras).status_code == 200
+    assert recibido == {"dias": 3, "producto": 1, "proveedor": None}
+    assert cliente.get("/inventario/lotes", params={"dias": -1}, headers=compras).status_code == 422
+
+
+AJUSTE = {"motivo": "Temporada alta", "cambios": [{"id_producto": 1, "precio_nuevo": "48.00"},
+                                                  {"id_producto": 2, "precio_nuevo": "22.00"}]}
+
+
+@pytest.fixture
+def precios(monkeypatch):
+    actuales = {1: {"id_producto": 1, "nombre": "Manzana", "precio_venta": Decimal("45.00"), "activo": 1},
+                2: {"id_producto": 2, "nombre": "Plátano", "precio_venta": Decimal("22.00"), "activo": 1}}
+    monkeypatch.setattr(repo, "precios_para_ajuste", lambda c, ids: {i: actuales[i] for i in ids if i in actuales})
+    mocks = {"cambiar_precio": MagicMock(), "registrar_cambio_precio": MagicMock()}
+    for n, m in mocks.items():
+        monkeypatch.setattr(repo, n, m)
+    return mocks
+
+
+def test_ajuste_de_precios_solo_registra_los_que_cambian(cliente, compras, precios):
+    r = cliente.post("/inventario/precios", json=AJUSTE, headers=compras)
+    assert r.status_code == 200 and r.json() == {"productos": 1}
+    precios["cambiar_precio"].assert_called_once()
+    assert precios["registrar_cambio_precio"].call_args.args[1:] == (1, Decimal("45.00"), Decimal("48.00"), 3,
+                                                                       "Temporada alta")
+    assert auditoria.registrar.call_args.args[2] == "ajuste_precios"
+
+
+@pytest.mark.parametrize(("cambios", "estado"), [
+    ([{"id_producto": 9, "precio_nuevo": "10.00"}], 409),
+    ([{"id_producto": 1, "precio_nuevo": "10.00"}, {"id_producto": 1, "precio_nuevo": "11.00"}], 409),
+    ([{"id_producto": 1, "precio_nuevo": "0"}], 422),
+    ([], 422),
+])
+def test_ajuste_rechazado_no_cambia_nada(cliente, compras, precios, cambios, estado):
+    r = cliente.post("/inventario/precios", json={"motivo": "x", "cambios": cambios}, headers=compras)
+    assert r.status_code == estado
+    precios["cambiar_precio"].assert_not_called()
+
+
+def test_cajero_no_ajusta_precios(cliente, compras, cabeceras, precios):
+    assert cliente.post("/inventario/precios", json=AJUSTE, headers=cabeceras).status_code == 403

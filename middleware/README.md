@@ -52,17 +52,37 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /inventario/productos/{id}/lotes` | `inventario` ver | Lotes del producto con existencia, primero el que caduca antes |
 | `GET /inventario/mermas` | `inventario` ver | Filtros `motivo`, `desde` y `hasta` |
 | `POST /inventario/mermas` | `inventario` crear | Descuenta del lote y guarda el costo (cantidad × costo del lote); no puede superar la existencia del lote (HU-17) |
+| `GET /inventario/existencias` | `inventario` ver | Existencia, valor y lotes por producto, con la venta diaria promedio de 30 días (HU-24) |
+| `GET /inventario/lotes` | `inventario` ver | Lotes con existencia que caducan en `dias` (o ya caducaron); filtros `id_producto` e `id_proveedor` |
+| `GET /inventario/productos/{id}/movimientos` | `inventario` ver | Entradas, ventas por día y caja, mermas y devoluciones en buen estado |
+| `GET /inventario/productos/{id}/precios` | `inventario` ver | Historial de cambios de precio |
+| `POST /inventario/precios` | `inventario` editar | Ajuste de varios precios en una transacción; cada cambio va al historial con su motivo (HU-31) |
 | `GET /compras/proveedores` | `compras` ver | Filtros `busqueda` (razón social o RFC) y `estatus` (`activos`, `inactivos`, `todos`); incluye el saldo por pagar |
 | `POST /compras/proveedores`, `PUT /compras/proveedores/{id}` | `compras` crear / editar | RFC único de 12 o 13 caracteres, correo válido; no se da de baja con saldo por pagar (HU-23) |
 | `GET /compras/lotes` | `compras` ver | Filtros `id_proveedor`, `desde`, `hasta` y `pago` (`Pagado`, `Pendiente`, `Vencido`) |
 | `GET /compras/lotes/siguiente-folio` | `compras` crear | Folio que probablemente tendrá el próximo lote |
 | `GET /compras/lotes/{folio}` | `compras` ver | Productos con recibido, vendido, merma y existencia; mermas y cuenta por pagar |
 | `POST /compras/lotes` | `compras` crear | En una transacción: lote, existencia por producto, costo vigente y, si `dias_credito` > 0, la cuenta por pagar (HU-11) |
+| `GET /compras/cuentas-por-pagar` | `compras` ver | Cuentas de los lotes a crédito con su vencimiento y saldo; filtro `id_proveedor` |
+| `POST /compras/cuentas-por-pagar/{folio}/pagos` | `compras` crear | Abono con Transferencia, Efectivo o Cheque; no supera el saldo; queda como egreso en `gastos_operativos` (HU-25) |
+| `GET /compras/proveedores/{id}/estado-de-cuenta` | `compras` ver | Compras y pagos del proveedor; los lotes de contado se pagan el mismo día |
 | `GET /finanzas/clientes-credito` | `finanzas` ver | Filtros `busqueda` y `estatus` (`activos`, `suspendidos`, `todos`); lo que debe cada cliente y si tiene una cuenta vencida |
 | `POST /finanzas/clientes-credito`, `PUT /finanzas/clientes-credito/{id}` | `finanzas` crear / editar | Límite mayor a 0 y días de crédito obligatorios; un cliente suspendido no compra a crédito (HU-39) |
-| `GET /admin/roles` | `admin` ver | Roles activos |
+| `GET /finanzas/cuentas-por-cobrar` | `finanzas` ver | Ventas a crédito con vencimiento y saldo; filtro `id_cliente` |
+| `GET /finanzas/cajas-abiertas` | `finanzas` crear | Turnos donde puede entrar un cobro en efectivo |
+| `POST /finanzas/cuentas-por-cobrar/{ticket}/cobros` | `finanzas` crear | Abono con `sp_registrar_cobro`; en efectivo, con `id_caja`, entra al corte de ese turno (HU-38b) |
+| `GET /finanzas/clientes-credito/{id}/estado-de-cuenta` | `finanzas` ver | Compras a crédito, cobros y devoluciones abonadas al crédito |
+| `GET /finanzas/gastos`, `POST /finanzas/gastos` | `finanzas` ver / crear | Gastos operativos por concepto y fechas; el detalle se guarda junto al concepto (HU-26) |
+| `GET /finanzas/dashboard` | `finanzas` ver | `anio` y `mes`; ingresos = ventas − devoluciones; egresos = compras recibidas + gastos; por semana y por concepto (HU-27) |
+| `GET /finanzas/flujo` | `finanzas` ver | `anio` y `mes`; en efectivo: ventas cobradas y cobros contra pagos a proveedores (incluye lotes de contado) y gastos; saldo inicial acumulado (HU-37) |
+| `GET /admin/roles` | `admin` ver | Roles activos con su número de usuarios |
 | `GET /admin/usuarios` | `admin` ver | Filtros `busqueda` (nombre o usuario) e `id_rol`; nunca devuelve el hash |
 | `POST /admin/usuarios`, `PUT /admin/usuarios/{id}` | `admin` crear / editar | Usuario y correo únicos, contraseña de al menos 8 caracteres guardada con PBKDF2; nadie se da de baja ni se quita el rol de Administrador a sí mismo; una contraseña nueva o una baja cierran las sesiones del usuario (HU-18) |
+| `POST /admin/roles` | `admin` crear | Rol nuevo, sin permisos; nombre único |
+| `GET /admin/roles/{id}/permisos`, `PUT /admin/roles/{id}/permisos` | `admin` ver / editar | Matriz ver/crear/editar/eliminar por módulo; el rol Administrador no se edita; un módulo que no viene queda sin permisos (sin `DELETE`) (HU-34) |
+| `GET /admin/auditoria` | `admin` ver | Filtros `usuario`, `modulo`, `accion`, `desde` y `hasta`; solo lectura (HU-35) |
+| `GET /admin/cajas` | `admin` ver | Terminales que han abierto caja, con su estado |
+| `GET /admin/metodos-pago`, `PUT /admin/metodos-pago/{id}` | `admin` ver / editar | Activar o desactivar métodos de pago; el efectivo no se desactiva (HU-41) |
 | `GET /facturacion/timbres` | `facturacion` ver | Timbres disponibles de los contratados (`FRUTIS_TIMBRES_CONTRATADOS`) |
 | `GET /facturacion/clientes` | `facturacion` ver | Datos fiscales activos con su número de facturas |
 | `POST /facturacion/clientes`, `PUT /facturacion/clientes/{id}` | `facturacion` crear / editar | RFC único y válido, régimen de 3 dígitos, código postal de 5 y correo (HU-32) |
@@ -71,6 +91,9 @@ Sin `FRUTIS_CERT_PATH` y `FRUTIS_KEY_PATH` el servidor escucha solo en `127.0.0.
 | `GET /facturacion/facturas`, `GET /facturacion/facturas/{folio}` | `facturacion` ver | Filtros `texto` (folio, RFC o razón social), `desde`, `hasta` y `estatus` |
 | `GET /facturacion/facturas/{folio}/xml` | `facturacion` ver | Descarga del XML timbrado |
 | `POST /facturacion/facturas/{folio}/cancelacion` | `facturacion` editar | Motivo SAT 01 a 04; el 01 exige el folio de una factura vigente que la sustituye (HU-33) |
+| `GET /reportes/resumen-del-dia` | Sesión | Resumen de la pantalla de inicio; cada parte (caducidades, por cobrar, alertas) solo si el rol puede ver ese módulo |
+| `GET /reportes/cajeros` | `reportes` ver | Usuarios activos que pueden cobrar y quien ya cobró |
+| `GET /reportes/{1..12}` | `reportes` ver | `desde`, `hasta` y `cajero`; columnas con su tipo (`texto`, `entero`, `dinero`, `fecha`, `porcentaje`), filas, total y barras (HU-28, HU-29) |
 
 **Autorización de devoluciones (SC-02).** El Administrador escribe su contraseña en la terminal del cajero. Si es correcta, el middleware entrega una autorización firmada que vale 5 minutos, solo para ese cajero y ese ticket, y no sirve como sesión. Los intentos fallidos cuentan para el bloqueo de 5 intentos de esa cuenta. Una contraseña incorrecta responde 403, no 401, para que la terminal no crea que expiró la sesión del cajero. Al registrar la devolución, la base vuelve a exigir que quien autoriza sea Administrador (triggers `trg_devoluciones_autoriza_*`).
 

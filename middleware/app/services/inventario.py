@@ -1,4 +1,4 @@
-"""Reglas del catálogo: categorías (HU-22), productos (HU-10) y mermas (HU-17)."""
+"""Reglas del catálogo: categorías (HU-22), productos (HU-10), mermas (HU-17) y precios (HU-31)."""
 from decimal import Decimal
 
 from sqlalchemy import Connection
@@ -8,7 +8,8 @@ from app.errores import ErrorNegocio
 from app.repositories import auditoria
 from app.repositories import inventario as repositorio
 from app.schemas.inventario import (
-    Categoria, CategoriaEntrada, MermaEntrada, MermaRegistrada, ProductoCatalogo, ProductoEntrada,
+    AjusteAplicado, AjustePreciosEntrada, Categoria, CategoriaEntrada, MermaEntrada, MermaRegistrada,
+    ProductoCatalogo, ProductoEntrada,
 )
 from app.security.dependencias import UsuarioActual
 
@@ -118,3 +119,26 @@ def registrar_merma(conn: Connection, datos: MermaEntrada, usuario: UsuarioActua
              ip, usuario)
     conn.commit()
     return MermaRegistrada(costo=costo)
+
+
+def ajustar_precios(conn: Connection, datos: AjustePreciosEntrada, usuario: UsuarioActual, ip: str | None) -> AjusteAplicado:
+    """Cambia varios precios en una transacción y guarda cada cambio en el historial (HU-31)."""
+    ids = [c.id_producto for c in datos.cambios]
+    if len(set(ids)) != len(ids):
+        raise ErrorNegocio(409, "Un producto aparece dos veces en el ajuste.")
+    actuales = repositorio.precios_para_ajuste(conn, ids)
+    for c in datos.cambios:
+        p = actuales.get(c.id_producto)
+        if p is None or not p["activo"]:
+            raise ErrorNegocio(409, "Producto no encontrado o inactivo.")
+    cambiados = 0
+    for c in datos.cambios:
+        anterior = actuales[c.id_producto]["precio_venta"]
+        if anterior == c.precio_nuevo:
+            continue
+        repositorio.cambiar_precio(conn, c.id_producto, c.precio_nuevo)
+        repositorio.registrar_cambio_precio(conn, c.id_producto, anterior, c.precio_nuevo, usuario.id_usuario, datos.motivo)
+        cambiados += 1
+    _auditar(conn, "ajuste_precios", f"{cambiados} productos · {datos.motivo}", ip, usuario)
+    conn.commit()
+    return AjusteAplicado(productos=cambiados)

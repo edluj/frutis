@@ -14,7 +14,7 @@ NOMBRES = [
     "Inventario por caducar", "Ventas por método de pago", "Estado de cuenta por proveedor",
     "Horas pico", "Facturación mensual", "Utilidad neta real", "Rendimiento por cajero",
 ]
-_COLORES = [C.GUINDA, C.CAFE, C.VERDE, "#6B625C", C.CAFE_CLARO]
+COLORES = [C.GUINDA, C.CAFE, C.VERDE, "#6B625C", C.CAFE_CLARO]
 
 
 def _pct(parte, total) -> D:
@@ -45,7 +45,7 @@ def _mermas(datos, desde, hasta, cajero):
     for f in filas:
         por_motivo[f["motivo"]] += f["costo"]
     total = sum(por_motivo.values(), D("0"))
-    barras = [(m, float(v / total) if total else 0, porcentaje(_pct(v, total)), _COLORES[i % 5])
+    barras = [(m, float(v / total) if total else 0, porcentaje(_pct(v, total)), COLORES[i % 5])
               for i, (m, v) in enumerate(sorted(por_motivo.items(), key=lambda kv: -kv[1]))]
     return dict(titulo=f"{len(filas)} mermas · {dinero(total)}", barras=barras,
                 columnas=[("Fecha", "izq"), ("Producto", "izq"), ("Lote", "izq"), ("Cantidad", "der"), ("Motivo", "izq"), ("Costo", "der")],
@@ -58,7 +58,7 @@ def _top(datos, desde, hasta, cajero):
               ("Jitomate saladet", 402.0, 11256), ("Fresa", 196.0, 9408), ("Limón sin semilla", 210.0, 6720)]
     total = sum(v[2] for v in ventas)
     return dict(titulo="Productos más vendidos · por importe", barras=[
-        (n, imp / ventas[0][2], dinero(imp), _COLORES[i % 5]) for i, (n, _, imp) in enumerate(ventas[:4])],
+        (n, imp / ventas[0][2], dinero(imp), COLORES[i % 5]) for i, (n, _, imp) in enumerate(ventas[:4])],
         columnas=[("Producto", "izq"), ("Cantidad", "der"), ("Importe", "der"), ("% del total", "der")],
         filas=[[n, f"{k:,.1f} kg", dinero(imp), porcentaje(_pct(imp, total))] for n, k, imp in ventas],
         total=["Total", "", dinero(total), "100 %"])

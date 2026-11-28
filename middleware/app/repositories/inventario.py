@@ -225,3 +225,131 @@ def listar_mermas(conn: Connection, motivo: str | None, desde: date | None, hast
             {"motivo": motivo, "desde": desde, "hasta": hasta},
         ).mappings()
     )
+
+
+# ---------------------------------------------------------------- existencias y caducidades (HU-24)
+
+def existencias(conn: Connection) -> list[RowMapping]:
+    return list(
+        conn.execute(
+            text("""
+                SELECT p.id_producto, p.id_categoria, p.nombre, p.unidad_venta, p.stock_minimo,
+                       COALESCE(i.existencia, 0) AS existencia, COALESCE(i.lotes, 0) AS lotes,
+                       COALESCE(i.valor, 0) AS valor, ROUND(COALESCE(v.vendido, 0) / 30, 3) AS venta_diaria
+                FROM productos p
+                LEFT JOIN (
+                    SELECT id_producto, SUM(cantidad_disponible) AS existencia,
+                           SUM(cantidad_disponible > 0) AS lotes,
+                           SUM(ROUND(cantidad_disponible * costo_unitario, 2)) AS valor
+                    FROM inventario GROUP BY id_producto
+                ) i ON i.id_producto = p.id_producto
+                LEFT JOIN (
+                    SELECT d.id_producto, SUM(d.cantidad) AS vendido
+                    FROM ventas_detalle d JOIN ventas_cabecera c ON c.id_venta = d.id_venta
+                    WHERE c.fecha >= CURDATE() - INTERVAL 30 DAY
+                    GROUP BY d.id_producto
+                ) v ON v.id_producto = p.id_producto
+                WHERE p.activo = TRUE
+                ORDER BY p.nombre
+            """)
+        ).mappings()
+    )
+
+
+def lotes_por_caducar(conn: Connection, dias: int, id_producto: int | None, id_proveedor: int | None) -> list[RowMapping]:
+    return list(
+        conn.execute(
+            text("""
+                SELECT i.fecha_caducidad AS caducidad, DATEDIFF(i.fecha_caducidad, CURDATE()) AS dias,
+                       p.id_producto, p.nombre AS producto, p.unidad_venta, l.folio AS lote,
+                       pr.razon_social AS proveedor, i.cantidad_inicial AS recibido, i.cantidad_disponible AS queda,
+                       ROUND(i.cantidad_disponible * i.costo_unitario, 2) AS costo
+                FROM inventario i
+                JOIN productos p ON p.id_producto = i.id_producto
+                JOIN lotes_compras l ON l.id_lote = i.id_lote
+                JOIN proveedores pr ON pr.id_proveedor = l.id_proveedor
+                WHERE i.cantidad_disponible > 0
+                  AND i.fecha_caducidad <= CURDATE() + INTERVAL :dias DAY
+                  AND (:producto IS NULL OR i.id_producto = :producto)
+                  AND (:proveedor IS NULL OR l.id_proveedor = :proveedor)
+                ORDER BY i.fecha_caducidad, l.folio
+            """),
+            {"dias": dias, "producto": id_producto, "proveedor": id_proveedor},
+        ).mappings()
+    )
+
+
+def movimientos(conn: Connection, id_producto: int) -> list[RowMapping]:
+    """Toda la historia del producto: la pantalla calcula la existencia después de cada movimiento."""
+    return list(
+        conn.execute(
+            text("""
+                SELECT l.fecha_entrada AS fecha, 'Entrada' AS tipo, i.cantidad_inicial AS cantidad,
+                       CONCAT('Lote ', l.folio, ' · ', pr.razon_social) AS referencia, u.usuario, 0 AS orden
+                FROM inventario i
+                JOIN lotes_compras l ON l.id_lote = i.id_lote
+                JOIN proveedores pr ON pr.id_proveedor = l.id_proveedor
+                JOIN usuarios u ON u.id_usuario = l.id_usuario
+                WHERE i.id_producto = :producto
+                UNION ALL
+                SELECT DATE(m.fecha), 'Merma', -m.cantidad,
+                       CONCAT(CASE m.motivo WHEN 'maduracion' THEN 'Maduración' WHEN 'golpe' THEN 'Golpe'
+                                            WHEN 'plaga' THEN 'Plaga u hongo' WHEN 'caducidad' THEN 'Caducidad'
+                                            WHEN 'devolucion' THEN 'Devolución en mal estado' ELSE 'Otro' END,
+                              ' · lote ', l.folio), u.usuario, 1
+                FROM mermas m
+                JOIN inventario i ON i.id_inventario = m.id_inventario
+                JOIN lotes_compras l ON l.id_lote = i.id_lote
+                JOIN usuarios u ON u.id_usuario = m.id_usuario
+                WHERE i.id_producto = :producto
+                UNION ALL
+                SELECT DATE(dv.fecha), 'Devolución', dv.cantidad,
+                       CONCAT('Devolución ', dv.folio, ' · ticket ', v.folio), u.usuario, 2
+                FROM devoluciones dv
+                JOIN ventas_detalle d ON d.id_detalle = dv.id_detalle
+                JOIN ventas_cabecera v ON v.id_venta = dv.id_venta
+                JOIN usuarios u ON u.id_usuario = dv.id_usuario
+                WHERE d.id_producto = :producto AND dv.estado_producto = 'bueno'
+                UNION ALL
+                SELECT DATE(v.fecha), 'Venta', -SUM(d.cantidad),
+                       CONCAT(COUNT(DISTINCT v.id_venta), ' tickets'), c.terminal, 3
+                FROM ventas_detalle d
+                JOIN ventas_cabecera v ON v.id_venta = d.id_venta
+                JOIN cajas_pos c ON c.id_caja = v.id_caja
+                WHERE d.id_producto = :producto
+                GROUP BY DATE(v.fecha), c.terminal
+                ORDER BY fecha DESC, orden DESC
+            """),
+            {"producto": id_producto},
+        ).mappings()
+    )
+
+
+# ---------------------------------------------------------------- precios (HU-31)
+
+def precios_para_ajuste(conn: Connection, ids: list[int]) -> dict[int, RowMapping]:
+    marcadores = ", ".join(f":p{i}" for i in range(len(ids)))
+    filas = conn.execute(
+        text(f"SELECT id_producto, nombre, precio_venta, activo FROM productos WHERE id_producto IN ({marcadores}) FOR UPDATE"),
+        {f"p{i}": v for i, v in enumerate(ids)},
+    ).mappings()
+    return {f["id_producto"]: f for f in filas}
+
+
+def cambiar_precio(conn: Connection, id_producto: int, precio: Decimal) -> None:
+    conn.execute(text("UPDATE productos SET precio_venta = :precio WHERE id_producto = :id"),
+                 {"precio": precio, "id": id_producto})
+
+
+def historial_precios(conn: Connection, id_producto: int) -> list[RowMapping]:
+    return list(
+        conn.execute(
+            text("""
+                SELECT h.fecha, h.precio_anterior AS anterior, h.precio_nuevo AS nuevo, u.usuario, h.motivo
+                FROM historial_precios h JOIN usuarios u ON u.id_usuario = h.id_usuario
+                WHERE h.id_producto = :producto
+                ORDER BY h.fecha DESC, h.id_historial DESC
+            """),
+            {"producto": id_producto},
+        ).mappings()
+    )

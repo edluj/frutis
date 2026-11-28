@@ -96,3 +96,19 @@ def leer_fecha(texto: str) -> date | None:
         return datetime.strptime(texto.strip(), "%d/%m/%Y").date()
     except ValueError:
         return None
+
+
+def meses_recientes(n: int, hoy: date | None = None) -> list[str]:
+    """["Noviembre 2026", "Octubre 2026", ...]: periodos de Finanzas con servidor."""
+    hoy = hoy or date.today()
+    salida, anio, mes = [], hoy.year, hoy.month
+    for _ in range(n):
+        salida.append(f"{_MESES_LARGOS[mes - 1].capitalize()} {anio}")
+        anio, mes = (anio - 1, 12) if mes == 1 else (anio, mes - 1)
+    return salida
+
+
+def periodo_a_mes(texto: str) -> tuple[int, int]:
+    """"Noviembre 2026" -> (2026, 11)."""
+    nombre, anio = texto.lower().split()
+    return int(anio), _MESES_LARGOS.index(nombre) + 1

@@ -1,7 +1,5 @@
-"""Datos que vienen del middleware. Hoy existen /auth, /pos, parte de /inventario y de
-/compras (middleware/README.md): login, cobro, apertura, corte, devoluciones, categorías,
-productos, mermas, proveedores, lotes de compra, clientes de crédito, usuarios y facturación
-(con el PAC simulado de SC-05).
+"""Datos que vienen del middleware (rutas en middleware/README.md): todas las pantallas están
+conectadas. La facturación usa el PAC simulado de SC-05.
 
 Las pantallas cuya ruta todavía no existe reciben `NoConectado` y lo muestran en un
 aviso, en lugar de inventar datos.
@@ -10,27 +8,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import quote
 
+from app import formato
 from app.api_client import ApiClient, ErrorApi, SesionExpirada
 from app.datos import ErrorNegocio, NoConectado
+from app.datos.reportes_demo import COLORES as COLORES_REPORTE
 
-# Ruta que falta en el middleware para cada operación todavía no conectada.
-_RUTAS_PENDIENTES = {
-    "resumen_inicio": "/reportes/resumen-del-dia",
-    "cuentas_por_pagar": "/compras/cuentas-por-pagar", "pagar_lote": "/compras/cuentas-por-pagar",
-    "estado_cuenta_proveedor": "/compras/proveedores/{id}/estado-de-cuenta",
-    "dashboard": "/finanzas/dashboard", "lista_gastos": "/finanzas/gastos", "registrar_gasto": "/finanzas/gastos",
-    "flujo": "/finanzas/flujo", "cuentas_por_cobrar": "/finanzas/cuentas-por-cobrar",
-    "cajas_abiertas": "/pos/cajas", "registrar_cobro": "/finanzas/cobros",
-    "estado_cuenta_cliente": "/finanzas/clientes-credito/{id}/estado-de-cuenta",
-    "existencias": "/inventario/existencias",
-    "lotes_caducidad": "/inventario/lotes",
-    "movimientos": "/inventario/movimientos", "previsualizar_precios": "/inventario/precios",
-    "aplicar_precios": "/inventario/precios", "historial": "/inventario/precios/historial",
-    "cajeros": "/reportes", "reporte": "/reportes",
-    "roles": "/admin/roles", "permisos_de": "/admin/roles", "guardar_permisos": "/admin/roles", "crear_rol": "/admin/roles",
-    "lista_auditoria": "/admin/auditoria", "configuracion_cajas": "/admin/cajas", "agregar_caja": "/admin/cajas",
-    "activar_metodo": "/admin/metodos-pago", "guardar_dispositivos": "/admin/dispositivos",
-}
+# Ruta que falta en el middleware para cada operación todavía no conectada (hoy ninguna).
+_RUTAS_PENDIENTES: dict[str, str] = {}
 
 
 # Filtro "Existencia" de productos (CAT-02) -> valor del middleware, y color de cada estado.
@@ -62,6 +46,33 @@ def _estatus_cxp(saldo: Decimal, vence: date | None) -> tuple[str, str]:
 
 # Estatus de los clientes de crédito (FIN-04).
 FILTRO_CLIENTES = {"Activo": "activos", "Pago vencido": "activos", "Suspendido": "suspendidos"}
+
+
+# Bitácora (ADM-03): códigos del middleware -> texto de pantalla.
+MODULOS_AUDITORIA = {"auth": "Acceso", "pos": "Punto de Venta", "inventario": "Catálogo e Inventario",
+                     "compras": "Proveedores y Compras", "finanzas": "Finanzas", "facturacion": "Facturación",
+                     "admin": "Administración", "reportes": "Reportes"}
+ACCIONES_AUDITORIA = {
+    "login": "Inicio de sesión", "logout": "Cierre de sesión", "login_fallido": "Inicio de sesión fallido",
+    "login_bloqueado": "Cuenta bloqueada", "login_inactivo": "Usuario inactivo", "venta": "Venta",
+    "venta_rechazada": "Venta rechazada", "apertura": "Apertura de caja", "corte": "Corte de caja",
+    "devolucion": "Devolución", "autorizacion_devolucion": "Devolución autorizada",
+    "categoria_alta": "Categoría registrada", "categoria_edicion": "Categoría editada",
+    "producto_alta": "Producto registrado", "producto_edicion": "Producto editado", "merma_alta": "Merma registrada",
+    "ajuste_precios": "Ajuste de precios", "proveedor_alta": "Proveedor registrado", "proveedor_edicion": "Proveedor editado",
+    "lote_alta": "Lote registrado", "pago_proveedor": "Pago a proveedor", "cliente_credito_alta": "Cliente de crédito registrado",
+    "cliente_credito_edicion": "Cliente de crédito editado", "cobro": "Cobro registrado", "gasto": "Gasto registrado",
+    "cliente_fiscal_alta": "Cliente fiscal registrado", "cliente_fiscal_edicion": "Cliente fiscal editado",
+    "factura_borrador": "Factura en borrador", "factura_timbrada": "Timbrado", "factura_cancelada": "Factura cancelada",
+    "usuario_alta": "Usuario registrado", "usuario_edicion": "Usuario editado", "usuario_baja": "Usuario desactivado",
+    "rol_alta": "Rol creado", "permisos_edicion": "Permisos actualizados", "metodo_activado": "Método de pago activado",
+    "metodo_desactivado": "Método de pago desactivado",
+}
+ACCIONES_ROJAS = ("fallido", "bloqueado", "inactivo", "rechazada", "cancelada", "baja", "desactivado")
+ROL_ADMINISTRADOR = "Administrador"
+SIN_CATALOGO_CAJAS = ("Las terminales se registran solas: una caja aparece aquí cuando alguien la abre con el nombre de "
+                      "terminal de su frutis.ini (terminal = POS-02).")
+SIN_DISPOSITIVOS = "La báscula y la impresora usan el simulador: el hardware real quedó fuera del alcance (SC-05)."
 
 
 # Etiquetas de la pantalla de devolución (POS-04) -> valor del middleware.
@@ -96,6 +107,8 @@ class DatosApi:
         self._administradores: dict[str, str] = {}
         # (folio del ticket, autorización firmada) que dio el Administrador para ese ticket.
         self._autorizacion: tuple[str, str] | None = None
+        # Texto del combo de cajas de cuentas por cobrar -> id_caja.
+        self._cajas_cobro: dict[str, int] = {}
 
     def __getattr__(self, nombre: str):
         if nombre in _RUTAS_PENDIENTES:
@@ -330,6 +343,100 @@ class DatosApi:
         else:
             self._llamar(self.api.post, "/inventario/productos", cuerpo)
 
+    # ---------------------------------------------------------- existencias y caducidades (HU-24)
+    def lotes_caducidad(self, id_producto=None, dias: int = 7, id_proveedor=None) -> list[dict]:
+        filas = self._llamar(self.api.get, "/inventario/lotes", dias=dias, id_producto=id_producto,
+                             id_proveedor=id_proveedor)
+        salida = []
+        for f in filas:
+            queda, unidad = _dec(f["queda"]), f["unidad_venta"]
+            salida.append(dict(caducidad=date.fromisoformat(f["caducidad"]), dias=f["dias"], producto=f["producto"],
+                               id_producto=f["id_producto"], lote=f["lote"], proveedor=f["proveedor"],
+                               recibido=_dec(f["recibido"]), queda=queda, unidad=unidad,
+                               queda_txt=f"{queda:.1f} kg" if unidad == "kg" else f"{queda:.0f} pza",
+                               costo=_dec(f["costo"]),
+                               tono="rojo" if f["dias"] <= 1 else "naranja" if f["dias"] <= 3 else "gris"))
+        return salida
+
+    def existencias(self, busqueda: str = "", id_categoria=None, mostrar: str = "Todos") -> dict:
+        todos = []
+        for f in self._llamar(self.api.get, "/inventario/existencias"):
+            ex, diaria, minimo = _dec(f["existencia"]), _dec(f["venta_diaria"]), _dec(f["stock_minimo"])
+            todos.append(dict(id_producto=f["id_producto"], id_categoria=f["id_categoria"], nombre=f["nombre"],
+                              unidad="kg" if f["unidad_venta"] == "kg" else "pza", existencia=ex, minimo=minimo,
+                              diaria=diaria, alcanza=(ex / diaria) if diaria else None, lotes=f["lotes"],
+                              valor=_dec(f["valor"]), bajo=ex < minimo))
+        filas = [f for f in todos
+                 if (not busqueda or busqueda.lower() in f["nombre"].lower())
+                 and (not id_categoria or f["id_categoria"] == id_categoria)
+                 and not (mostrar == "Bajo el mínimo" and not f["bajo"])
+                 and not (mostrar == "Sin existencia" and f["existencia"] > 0)]
+        return dict(filas=filas, valor=sum((f["valor"] for f in todos), Decimal("0")),
+                    con_mov=sum(1 for f in todos if f["lotes"]),
+                    bajos=[f for f in todos if f["bajo"] and f["existencia"] > 0],
+                    sin=[f for f in todos if f["existencia"] <= 0], caducar=len(self.lotes_caducidad(dias=3)))
+
+    def movimientos(self, id_producto: int, desde: date, hasta: date, tipo: str = "Todos") -> dict:
+        p = self.producto(id_producto)
+        movs = [dict(fecha=date.fromisoformat(m["fecha"]), tipo=m["tipo"], cantidad=_dec(m["cantidad"]),
+                     referencia=m["referencia"], usuario=m["usuario"],
+                     tono={"Entrada": "verde", "Merma": "naranja", "Devolución": "verde"}.get(m["tipo"], "gris"))
+                for m in self._llamar(self.api.get, f"/inventario/productos/{id_producto}/movimientos")]
+        saldo = p["existencia"]
+        for m in movs:  # llegan de hoy hacia atrás: existencia después de cada movimiento
+            m["existencia"] = saldo
+            saldo -= m["cantidad"]
+        visibles = [m for m in movs if desde <= m["fecha"] <= hasta and (tipo == "Todos" or m["tipo"] == tipo.rstrip("s"))]
+        entradas = sum((m["cantidad"] for m in visibles if m["tipo"] == "Entrada"), Decimal("0"))
+        ventas = -sum((m["cantidad"] for m in visibles if m["tipo"] == "Venta"), Decimal("0"))
+        mermas = -sum((m["cantidad"] for m in visibles if m["tipo"] == "Merma"), Decimal("0"))
+        return dict(producto=p, unidad=p["unidad_venta"], movimientos=visibles, entradas=entradas,
+                    lotes_entrada=sum(1 for m in visibles if m["tipo"] == "Entrada"),
+                    ventas=ventas, importe_ventas=(ventas * p["precio_venta"]).quantize(Decimal("0.01")),
+                    mermas=mermas, costo_mermas=(mermas * p["costo"]).quantize(Decimal("0.01")),
+                    pct_merma=(mermas / entradas * 100) if entradas else Decimal("0"),
+                    existencia=p["existencia"], minimo=p["stock_minimo"], bajo=p["existencia"] < p["stock_minimo"])
+
+    # ---------------------------------------------------------- precios (HU-31)
+    def previsualizar_precios(self, aplicar: str, id_categoria, id_producto, tipo: str, valor: Decimal) -> list[dict]:
+        """Solo cálculo sobre los precios y costos vigentes: no guarda nada."""
+        activos = [p for p in self.lista_productos() if p["activo"]]
+        if aplicar == "Una categoría":
+            prods = [p for p in activos if p["id_categoria"] == id_categoria]
+        elif aplicar == "Un producto":
+            prods = [p for p in activos if p["id_producto"] == id_producto]
+        else:
+            prods = activos
+        filas = []
+        for p in prods:
+            actual = p["precio_venta"]
+            if tipo == "Porcentaje de aumento":
+                nuevo = actual * (1 + valor / 100)
+            elif tipo == "Porcentaje de descuento":
+                nuevo = actual * (1 - valor / 100)
+            else:
+                nuevo = valor
+            nuevo = nuevo.quantize(Decimal("0.01"))
+            margen = ((nuevo - p["costo"]) / nuevo * 100) if nuevo else Decimal("0")
+            filas.append(dict(id_producto=p["id_producto"], nombre=p["nombre"], unidad=p["unidad_venta"], costo=p["costo"],
+                              actual=actual, nuevo=nuevo, margen=margen, perdida=nuevo < p["costo"]))
+        return filas
+
+    def aplicar_precios(self, filas: list[dict], motivo: str) -> None:
+        self._llamar(self.api.post, "/inventario/precios", dict(
+            motivo=motivo, cambios=[dict(id_producto=f["id_producto"], precio_nuevo=str(f["nuevo"])) for f in filas]))
+
+    def historial(self, id_producto: int) -> dict:
+        p = self.producto(id_producto)
+        cambios = [dict(fecha=datetime.fromisoformat(c["fecha"]), anterior=_dec(c["anterior"]), nuevo=_dec(c["nuevo"]),
+                        usuario=c["usuario"], motivo=c["motivo"] or "", costo=p["costo"])
+                   for c in self._llamar(self.api.get, f"/inventario/productos/{id_producto}/precios")]
+        # La base no guarda el costo de cada fecha: la gráfica usa el costo vigente.
+        puntos = [(f"{c['fecha'].day:02d} {MESES[c['fecha'].month - 1][:3].lower()}", c["nuevo"], p["costo"])
+                  for c in reversed(cambios)]
+        puntos.append(("Hoy", p["precio_venta"], p["costo"]))
+        return dict(producto=p, cambios=cambios, puntos=puntos)
+
     # ---------------------------------------------------------- mermas (HU-17)
     def lotes_de_producto(self, id_producto: int) -> list[dict]:
         filas = self._llamar(self.api.get, f"/inventario/productos/{id_producto}/lotes")
@@ -353,6 +460,49 @@ class DatosApi:
             id_producto=id_producto, folio_lote=lote, cantidad=str(cantidad),
             motivo=MOTIVO_DE_PANTALLA.get(motivo, "otro"), observaciones=obs or None))
         return _dec(r["costo"])
+
+    # ---------------------------------------------------------- cuentas por pagar (HU-25)
+    def cuentas_por_pagar(self, id_proveedor=None, estatus="Pendientes y vencidas") -> dict:
+        filas = []
+        for c in self._llamar(self.api.get, "/compras/cuentas-por-pagar", id_proveedor=id_proveedor):
+            total, saldo, vence = _dec(c["total"]), _dec(c["saldo"]), date.fromisoformat(c["vence"])
+            est, tono = _estatus_cxp(saldo, vence)
+            if estatus == "Pendientes y vencidas" and saldo <= 0 or estatus == "Vencidas" and not est.startswith("Vencida"):
+                continue
+            if estatus == "Pagadas" and saldo > 0:
+                continue
+            filas.append(dict(lote=c["lote"], proveedor=c["proveedor"], vence=vence, total=total, saldo=saldo,
+                              estatus=est, tono=tono))
+        abiertas = [f for f in filas if f["saldo"] > 0]
+        vencidas = [f for f in abiertas if f["estatus"].startswith("Vencida")]
+        proximas = [f for f in abiertas if f["estatus"].startswith("Vence")]
+        return dict(filas=filas, total=sum((f["saldo"] for f in abiertas), Decimal("0")), lotes=len(abiertas),
+                    proveedores=len({f["proveedor"] for f in abiertas}),
+                    vencido=sum((f["saldo"] for f in vencidas), Decimal("0")), vencidas=vencidas,
+                    proximo=sum((f["saldo"] for f in proximas), Decimal("0")), proximas=proximas)
+
+    def pagar_lote(self, folio: str, monto: Decimal, metodo: str, referencia: str) -> Decimal:
+        r = self._llamar(self.api.post, f"/compras/cuentas-por-pagar/{quote(folio)}/pagos",
+                         dict(monto=str(monto), metodo=metodo, referencia=referencia or None))
+        return _dec(r["saldo"])
+
+    def estado_cuenta_proveedor(self, id_proveedor: int, desde: date, hasta: date) -> dict:
+        prov = next(p for p in self.lista_proveedores("", "Todos") if p["id"] == id_proveedor)
+        movs = [dict(fecha=date.fromisoformat(m["fecha"]), movimiento=m["movimiento"], referencia=m["referencia"],
+                     cargo=_dec(m["cargo"]), abono=_dec(m["abono"]))
+                for m in self._llamar(self.api.get, f"/compras/proveedores/{id_proveedor}/estado-de-cuenta")]
+        inicial = sum((m["cargo"] - m["abono"] for m in movs if m["fecha"] < desde), Decimal("0"))
+        periodo = [m for m in movs if desde <= m["fecha"] <= hasta]
+        saldo = inicial
+        for m in periodo:
+            saldo += m["cargo"] - m["abono"]
+            m["saldo"] = saldo
+        vencido = sum((f["saldo"] for f in self.cuentas_por_pagar(id_proveedor)["vencidas"]), Decimal("0"))
+        return dict(proveedor=prov, inicial=inicial, movimientos=periodo,
+                    compras=sum((m["cargo"] for m in periodo), Decimal("0")),
+                    pagos=sum((m["abono"] for m in periodo), Decimal("0")),
+                    n_compras=sum(1 for m in periodo if m["cargo"]), n_pagos=sum(1 for m in periodo if m["abono"]),
+                    saldo=saldo, vencido=vencido)
 
     # ---------------------------------------------------------- crédito (HU-39, HU-38a)
     def clientes_credito_pos(self) -> list[dict]:
@@ -465,6 +615,198 @@ class DatosApi:
     def cancelar_factura(self, folio: str, motivo: str, sustituto: str) -> None:
         self._llamar(self.api.post, f"/facturacion/facturas/{quote(folio)}/cancelacion",
                      dict(motivo=motivo[:2], folio_sustituto=sustituto.strip().upper() or None))
+
+    # ---------------------------------------------------------- cobros a clientes (HU-38b)
+    def cuentas_por_cobrar(self, id_cliente=None, estatus: str = "Pendientes y vencidas") -> dict:
+        hoy, filas = date.today(), []
+        for c in self._llamar(self.api.get, "/finanzas/cuentas-por-cobrar", id_cliente=id_cliente):
+            total, saldo, vence = _dec(c["total"]), _dec(c["saldo"]), date.fromisoformat(c["vence"])
+            if saldo <= 0:
+                est, tono = "Pagada", "verde"
+            elif vence < hoy:
+                est, tono = f"Vencida · {(hoy - vence).days} días", "rojo"
+            elif saldo < total:
+                est, tono = "Pago parcial", "naranja"
+            else:
+                est, tono = "Pendiente", "gris"
+            if estatus == "Pendientes y vencidas" and saldo <= 0 or estatus == "Vencidas" and tono != "rojo":
+                continue
+            if estatus == "Pagadas" and saldo > 0:
+                continue
+            filas.append(dict(ticket=c["ticket"], id_cliente=c["id_cliente"], cliente=c["cliente"],
+                              venta=date.fromisoformat(c["venta"]), vence=vence, total=total, saldo=saldo,
+                              estatus=est, tono=tono))
+        abiertas = [f for f in filas if f["saldo"] > 0]
+        vencidas = [f for f in abiertas if f["tono"] == "rojo"]
+        mes = (hoy.year, hoy.month)
+        flujo = self._llamar(self.api.get, "/finanzas/flujo", anio=mes[0], mes=mes[1])
+        return dict(filas=filas, total=sum((f["saldo"] for f in abiertas), Decimal("0")), ventas=len(abiertas),
+                    clientes=len({f["cliente"] for f in abiertas}), vencido=sum((f["saldo"] for f in vencidas), Decimal("0")),
+                    vencidas=vencidas, cobrado_mes=_dec(flujo["cobros"]), vendido_credito=_dec(flujo["credito"]))
+
+    def cajas_abiertas(self) -> list[str]:
+        self._cajas_cobro = {f"{c['terminal']} · abierta": c["id_caja"]
+                             for c in self._llamar(self.api.get, "/finanzas/cajas-abiertas")}
+        return [*self._cajas_cobro, "Sin caja (no entra al corte)"]
+
+    def registrar_cobro(self, ticket: str, monto: Decimal, metodo: str, caja: str | None) -> Decimal:
+        r = self._llamar(self.api.post, f"/finanzas/cuentas-por-cobrar/{quote(ticket)}/cobros",
+                         dict(monto=str(monto), metodo=metodo, id_caja=self._cajas_cobro.get(caja or "")))
+        return _dec(r["saldo"])
+
+    def estado_cuenta_cliente(self, id_cliente: int, desde: date, hasta: date) -> dict:
+        cli = next(c for c in self.lista_clientes_credito() if c["id"] == id_cliente)
+        movs = [dict(fecha=date.fromisoformat(m["fecha"]), movimiento=m["movimiento"], referencia=m["referencia"],
+                     cargo=_dec(m["cargo"]), abono=_dec(m["abono"]))
+                for m in self._llamar(self.api.get, f"/finanzas/clientes-credito/{id_cliente}/estado-de-cuenta")]
+        inicial = sum((m["cargo"] - m["abono"] for m in movs if m["fecha"] < desde), Decimal("0"))
+        periodo = [m for m in movs if desde <= m["fecha"] <= hasta]
+        saldo = inicial
+        for m in periodo:
+            saldo += m["cargo"] - m["abono"]
+            m["saldo"] = saldo
+        abiertas = [f for f in self.cuentas_por_cobrar(id_cliente)["filas"] if f["saldo"] > 0]
+        return dict(cliente=cli, inicial=inicial, movimientos=periodo, saldo=saldo,
+                    compras=sum((m["cargo"] for m in periodo), Decimal("0")),
+                    pagos=sum((m["abono"] for m in periodo), Decimal("0")),
+                    n_compras=sum(1 for m in periodo if m["cargo"]), n_pagos=sum(1 for m in periodo if m["abono"]),
+                    disponible=cli["limite"] - cli["debe"], vence=min((f["vence"] for f in abiertas), default=None),
+                    estatus=cli["estatus_vista"])
+
+    # ---------------------------------------------------------- gastos (HU-26)
+    def lista_gastos(self, concepto: str = "Todos", desde=None, hasta=None) -> dict:
+        filas = [dict(fecha=date.fromisoformat(g["fecha"]), concepto=g["concepto"], detalle=g["detalle"],
+                      metodo=g["metodo"], monto=_dec(g["monto"]), comprobante=g["comprobante"], usuario=g["usuario"])
+                 for g in self._llamar(self.api.get, "/finanzas/gastos",
+                                       concepto=None if concepto == "Todos" else concepto,
+                                       desde=desde.isoformat() if desde else None, hasta=hasta.isoformat() if hasta else None)]
+        return dict(filas=filas, total=sum((g["monto"] for g in filas), Decimal("0")))
+
+    def registrar_gasto(self, datos: dict) -> None:
+        # El servidor todavía no recibe archivos: el comprobante se queda en la terminal.
+        self._llamar(self.api.post, "/finanzas/gastos", dict(
+            fecha=datos["fecha"].isoformat(), concepto=datos["concepto"], detalle=datos.get("detalle") or None,
+            metodo=datos["metodo"], monto=str(datos["monto"])))
+
+    # ---------------------------------------------------------- dashboard y flujo (HU-27, HU-37)
+    def dashboard(self, periodo: str) -> dict:
+        anio, mes = formato.periodo_a_mes(periodo)
+        d = self._llamar(self.api.get, "/finanzas/dashboard", anio=anio, mes=mes)
+        return dict({k: _dec(d[k]) for k in ("ingresos", "compras", "gastos", "egresos", "utilidad", "margen",
+                                              "margen_anterior")},
+                    tickets=d["tickets"],
+                    semanas=[(s["semana"], float(s["ingresos"]), float(s["egresos"])) for s in d["semanas"]],
+                    conceptos=[dict(concepto=c["concepto"], importe=_dec(c["importe"]), pct=_dec(c["pct"]))
+                               for c in d["conceptos"]])
+
+    def flujo(self, periodo: str) -> dict:
+        anio, mes = formato.periodo_a_mes(periodo)
+        f = self._llamar(self.api.get, "/finanzas/flujo", anio=anio, mes=mes)
+        return dict({k: _dec(f[k]) for k in ("inicial", "ventas", "cobros", "pagos_proveedores", "gastos", "credito")},
+                    semanas=[(s["semana"], _dec(s["entradas"]), _dec(s["salidas"])) for s in f["semanas"]])
+
+    # ---------------------------------------------------------- roles y permisos (HU-34)
+    def roles(self) -> list[dict]:
+        return [dict(nombre=r["nombre"], usuarios=r["usuarios"], fijo=r["es_sistema"], id_rol=r["id_rol"])
+                for r in self._llamar(self.api.get, "/admin/roles")]
+
+    def _id_rol(self, nombre: str) -> int:
+        return next(r["id_rol"] for r in self.roles() if r["nombre"] == nombre)
+
+    def permisos_de(self, rol: str) -> dict:
+        filas = {p["modulo"]: p for p in self._llamar(self.api.get, f"/admin/roles/{self._id_rol(rol)}/permisos")}
+        matriz = {m: tuple(int(bool(filas.get(m, {}).get(f"puede_{a}"))) for a in ("ver", "crear", "editar", "eliminar"))
+                  for m in ("pos", "compras", "facturacion", "finanzas", "inventario", "reportes", "admin")}
+        # No se guardan aparte: el crédito sale del permiso de cobrar y las devoluciones y el corte de
+        # todas las cajas son del Administrador (SC-02).
+        es_admin = rol == ROL_ADMINISTRADOR
+        return dict(matriz=matriz, especiales=dict(credito=bool(matriz["pos"][1]), devoluciones=es_admin, cortes=es_admin))
+
+    def guardar_permisos(self, rol: str, matriz: dict, especiales: dict) -> None:
+        permisos = [dict(modulo=m, puede_ver=bool(v[0]), puede_crear=bool(v[1]), puede_editar=bool(v[2]),
+                         puede_eliminar=bool(v[3])) for m, v in matriz.items() if any(v)]
+        self._llamar(self.api.put, f"/admin/roles/{self._id_rol(rol)}/permisos", dict(permisos=permisos))
+
+    def crear_rol(self, nombre: str) -> None:
+        self._llamar(self.api.post, "/admin/roles", dict(nombre=nombre))
+
+    # ---------------------------------------------------------- bitácora (HU-35)
+    def lista_auditoria(self, usuario="Todos", modulo="Todos", accion="Todas", desde=None, hasta=None) -> list[dict]:
+        salida = []
+        for a in self._llamar(self.api.get, "/admin/auditoria", desde=desde.isoformat() if desde else None,
+                              hasta=hasta.isoformat() if hasta else None):
+            fila = dict(fecha=datetime.fromisoformat(a["fecha"]), usuario=a["usuario"] or "—",
+                        modulo=MODULOS_AUDITORIA.get(a["modulo"], a["modulo"]),
+                        accion=ACCIONES_AUDITORIA.get(a["accion"], a["accion"].replace("_", " ").capitalize()),
+                        detalle=a["detalle"] or "", ip=a["ip"] or "—",
+                        tono="rojo" if a["accion"].endswith(ACCIONES_ROJAS) else "gris")
+            if (usuario in ("Todos", fila["usuario"]) and modulo in ("Todos", fila["modulo"])
+                    and accion in ("Todas", fila["accion"])):
+                salida.append(fila)
+        return salida
+
+    # ---------------------------------------------------------- cajas y métodos de pago (HU-41)
+    def configuracion_cajas(self) -> dict:
+        cajas = [dict(nombre=f"Caja {t['terminal']}", corto=t["terminal"], terminal=t["terminal"], ip="—",
+                      estado=f"Abierta · {t['cajero']}" if t["abierta"] else "Cerrada", abierta=bool(t["abierta"]))
+                 for t in self._llamar(self.api.get, "/admin/cajas")]
+        metodos = [dict(m) for m in self._llamar(self.api.get, "/admin/metodos-pago")]
+        simulador = "Simulador (SC-05)"
+        return dict(cajas=cajas, metodos=metodos, dispositivos=dict(bascula_modelo=simulador, impresora_modelo=simulador,
+                                                                    lector="Teclado", papel="80 mm", puerto="—"))
+
+    def agregar_caja(self, nombre: str, terminal: str, ip: str) -> None:
+        raise ErrorNegocio(SIN_CATALOGO_CAJAS)
+
+    def activar_metodo(self, id_metodo: int, activo: bool) -> None:
+        self._llamar(self.api.put, f"/admin/metodos-pago/{id_metodo}", dict(activo=activo))
+
+    def guardar_dispositivos(self, datos: dict) -> None:
+        raise ErrorNegocio(SIN_DISPOSITIVOS)
+
+    # ---------------------------------------------------------- reportes e inicio (HU-28, HU-29)
+    def resumen_inicio(self) -> dict:
+        r = self._llamar(self.api.get, "/reportes/resumen-del-dia")
+        ventas = _dec(r["ventas_hoy"])
+        return dict(ventas_hoy=ventas, tickets=r["tickets"], ticket_promedio=ventas / r["tickets"] if r["tickets"] else Decimal("0"),
+                    caja=dict(abierta=r["caja_abierta"], detalle=r["caja_detalle"]),
+                    # Sin permiso para ese módulo el servidor no manda el dato.
+                    caducar="—" if r["caducar"] is None else r["caducar"], caducar_detalle=r["caducar_detalle"],
+                    por_cobrar=_dec(r["por_cobrar"]), por_cobrar_detalle=r["por_cobrar_detalle"],
+                    alertas=[(a["etiqueta"], a["texto"], a["tono"]) for a in r["alertas"]])
+
+    def cajeros(self) -> list[str]:
+        return self._llamar(self.api.get, "/reportes/cajeros")
+
+    def reporte(self, numero: int, desde: date, hasta: date, cajero: str) -> dict:
+        r = self._llamar(self.api.get, f"/reportes/{numero}", desde=desde.isoformat(), hasta=hasta.isoformat(),
+                         cajero=None if cajero == "Todos" else cajero)
+        tipos = [c["tipo"] for c in r["columnas"]]
+
+        def celda(valor, tipo: str) -> str:
+            if valor is None or valor == "":
+                return ""
+            if tipo == "dinero":
+                return formato.dinero(_dec(valor))
+            if tipo == "porcentaje":
+                return formato.porcentaje(_dec(valor))
+            if tipo == "fecha":
+                try:
+                    return formato.fecha(date.fromisoformat(valor))
+                except ValueError:  # la etiqueta "Total" en una columna de fechas
+                    return str(valor)
+            if tipo == "entero":
+                return f"{int(valor):,}"
+            return str(valor)
+
+        textos = {"dinero": lambda v: formato.dinero(_dec(v)), "porcentaje": lambda v: formato.porcentaje(_dec(v)),
+                  "tickets": lambda v: f"{int(_dec(v))} tickets"}
+        return dict(
+            titulo=r["titulo"], columnas=[(c["nombre"], c["alineacion"]) for c in r["columnas"]],
+            filas=[[celda(v, t) for v, t in zip(fila, tipos)] for fila in r["filas"]],
+            total=[celda(v, t) for v, t in zip(r["total"], tipos)] if r["total"] else None,
+            barras=[(b["nombre"], b["fraccion"], textos[b["tipo"]](b["valor"]), COLORES_REPORTE[i % len(COLORES_REPORTE)])
+                    for i, b in enumerate(r["barras"])])
 
     # ---------------------------------------------------------- compras (HU-23, HU-11)
     @staticmethod

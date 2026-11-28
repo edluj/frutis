@@ -7,7 +7,7 @@ from app.widgets import BarrasSimples, Card, Celda, Col, Tabla, boton, columnas,
 
 class FlujoView(PaginaBase):
     def __init__(self, ctx: Contexto):
-        self.periodo = combo(["Octubre 2026", "Septiembre 2026"])
+        self.periodo = combo(["Octubre 2026", "Septiembre 2026"] if ctx.datos.es_demo else fmt.meses_recientes(3))
         super().__init__(ctx, "Finanzas", "Flujo de efectivo",
                          acciones=[self.periodo, boton("Exportar reporte 5", "secundario", self._exportar)])
         if ctx.datos.es_demo:

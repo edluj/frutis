@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -112,3 +112,68 @@ class MermaEntrada(BaseModel):
 
 class MermaRegistrada(BaseModel):
     costo: Decimal
+
+
+# ---------------------------------------------------------------- existencias y caducidades (HU-24)
+
+class Existencia(BaseModel):
+    id_producto: int
+    id_categoria: int
+    nombre: str
+    unidad_venta: str
+    existencia: Decimal
+    stock_minimo: Decimal
+    # Promedio vendido por día en los últimos 30 días.
+    venta_diaria: Decimal
+    lotes: int
+    valor: Decimal
+
+
+class LotePorCaducar(BaseModel):
+    caducidad: date
+    dias: int
+    id_producto: int
+    producto: str
+    unidad_venta: str
+    lote: str
+    proveedor: str
+    recibido: Decimal
+    queda: Decimal
+    costo: Decimal
+
+
+class Movimiento(BaseModel):
+    fecha: date
+    tipo: Literal["Entrada", "Venta", "Merma", "Devolución"]
+    # Positiva si entra al inventario, negativa si sale.
+    cantidad: Decimal
+    referencia: str
+    usuario: str
+
+
+# ---------------------------------------------------------------- precios (HU-31)
+
+class CambioPrecio(BaseModel):
+    fecha: datetime
+    anterior: Decimal
+    nuevo: Decimal
+    usuario: str
+    motivo: str | None
+
+
+class PrecioNuevo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id_producto: int = Field(gt=0)
+    precio_nuevo: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+
+
+class AjustePreciosEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    motivo: str = Field(min_length=1, max_length=200, pattern=PATRON_TEXTO_SEGURO)
+    cambios: list[PrecioNuevo] = Field(min_length=1, max_length=500)
+
+
+class AjusteAplicado(BaseModel):
+    productos: int
