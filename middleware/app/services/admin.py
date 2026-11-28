@@ -1,11 +1,11 @@
-"""Reglas de la administración de usuarios (HU-18)."""
+"""Reglas de Administración: usuarios (HU-18), roles y permisos (HU-34) y métodos de pago (HU-41)."""
 from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError
 
 from app.errores import ErrorNegocio
 from app.repositories import admin as repositorio
 from app.repositories import auditoria, usuarios
-from app.schemas.admin import Usuario, UsuarioEntrada
+from app.schemas.admin import MODULOS, PermisosEntrada, Rol, RolEntrada, Usuario, UsuarioEntrada
 from app.security.dependencias import UsuarioActual
 from app.security.passwords import hash_password
 
@@ -71,3 +71,59 @@ def guardar_usuario(
     salida = Usuario(**repositorio.usuario(conn, id_usuario))
     conn.commit()
     return salida
+
+
+# ---------------------------------------------------------------- roles y permisos (HU-34)
+
+def _rol_editable(conn: Connection, id_rol: int):
+    rol = repositorio.rol(conn, id_rol)
+    if rol is None or not rol["activo"]:
+        raise ErrorNegocio(404, "Rol no encontrado.")
+    if rol["es_sistema"]:
+        raise ErrorNegocio(409, "El rol Administrador no se edita.")
+    return rol
+
+
+def guardar_permisos(conn: Connection, id_rol: int, datos: PermisosEntrada, actual: UsuarioActual, ip: str | None) -> None:
+    rol = _rol_editable(conn, id_rol)
+    recibidos = {p.modulo: p for p in datos.permisos}
+    if len(recibidos) != len(datos.permisos):
+        raise ErrorNegocio(409, "Un módulo aparece dos veces.")
+    for modulo in MODULOS:
+        p = recibidos.get(modulo)
+        repositorio.guardar_permiso(conn, id_rol, p.model_dump() if p else
+                                    {"modulo": modulo, "puede_ver": False, "puede_crear": False,
+                                     "puede_editar": False, "puede_eliminar": False})
+    resumen = ", ".join(f"{p.modulo} " + "".join(l for l, v in zip("VCEB", (p.puede_ver, p.puede_crear, p.puede_editar,
+                                                                           p.puede_eliminar)) if v)
+                        for p in datos.permisos if any((p.puede_ver, p.puede_crear, p.puede_editar, p.puede_eliminar)))
+    auditoria.registrar(conn, "admin", "permisos_edicion", f"Rol {rol['nombre']}: {resumen or 'sin permisos'}",
+                        ip, actual.id_usuario, actual.usuario)
+    conn.commit()
+
+
+def crear_rol(conn: Connection, datos: RolEntrada, actual: UsuarioActual, ip: str | None) -> Rol:
+    if repositorio.nombre_rol_en_uso(conn, datos.nombre):
+        raise ErrorNegocio(409, "Ya existe un rol con ese nombre.", "nombre")
+    try:
+        id_rol = repositorio.insertar_rol(conn, datos.nombre)
+    except IntegrityError as exc:
+        conn.rollback()
+        raise ErrorNegocio(409, "Ya existe un rol con ese nombre.", "nombre") from exc
+    auditoria.registrar(conn, "admin", "rol_alta", datos.nombre, ip, actual.id_usuario, actual.usuario)
+    conn.commit()
+    return Rol(id_rol=id_rol, nombre=datos.nombre)
+
+
+# ---------------------------------------------------------------- métodos de pago (HU-41)
+
+def activar_metodo(conn: Connection, id_metodo: int, activo: bool, actual: UsuarioActual, ip: str | None) -> None:
+    metodo = repositorio.metodo(conn, id_metodo)
+    if metodo is None:
+        raise ErrorNegocio(404, "Método de pago no encontrado.")
+    if metodo["es_efectivo"] and not activo:
+        raise ErrorNegocio(409, "El efectivo no se puede desactivar.")
+    repositorio.activar_metodo(conn, id_metodo, activo)
+    auditoria.registrar(conn, "admin", "metodo_activado" if activo else "metodo_desactivado", metodo["nombre"],
+                        ip, actual.id_usuario, actual.usuario)
+    conn.commit()

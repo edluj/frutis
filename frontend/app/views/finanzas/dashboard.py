@@ -9,7 +9,7 @@ from app.widgets import (
 
 class DashboardView(PaginaBase):
     def __init__(self, ctx: Contexto):
-        self.periodo = combo(["Octubre 2026", "Septiembre 2026", "Agosto 2026"])
+        self.periodo = combo(["Octubre 2026", "Septiembre 2026", "Agosto 2026"] if ctx.datos.es_demo else fmt.meses_recientes(3))
         super().__init__(ctx, "Finanzas", "Dashboard financiero", acciones=[etiqueta("Periodo", "Etiqueta"), self.periodo])
         if ctx.datos.es_demo:
             self.lbl_estado.setVisible(False)

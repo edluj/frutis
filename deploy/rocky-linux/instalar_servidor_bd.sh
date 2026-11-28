@@ -250,4 +250,12 @@ Servidor de base de datos listo.
   Credenciales ..... $CREDENCIALES (solo root puede leerlo)
 RESUMEN
 
+if [[ "$MODO" == produccion ]]; then
+  cat <<SIGUIENTE
+
+Siguiente paso: crear el primer Administrador (la base de producción no trae usuarios):
+  cd $REPO/middleware && .venv/bin/python -m app.crear_administrador --usuario <usuario> --nombre "<nombre>" --correo <correo>
+SIGUIENTE
+fi
+
 [[ "$tablas" == "23" && "$rutinas" == "7" && "$triggers" == "4" ]] || falla "La verificación no coincide con lo esperado."

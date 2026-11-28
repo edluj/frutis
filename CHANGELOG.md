@@ -4,6 +4,20 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+## [1.1.0] - 2026-11-27
+
+Todas las pantallas conectadas con el middleware (Inventario, Compras, Finanzas, Administración y Reportes) y una instalación de producción que trae sus catálogos base y crea su primer Administrador.
+
+### Corregido
+- Una instalación de producción quedaba sin roles, permisos ni métodos de pago (solo venían en `seed.sql`) y sin nadie que pudiera iniciar sesión. Ahora `database/catalogos.sql` se carga siempre (también con `--migraciones`, antes de las migraciones) y `python -m app.crear_administrador` crea el primer Administrador. La CI instala una base de producción y crea su Administrador.
+
+### Agregado
+- Inventario completo (HU-24, HU-31): existencias con valor y días de alcance, lotes por caducar, movimientos por producto (entradas, ventas, mermas y devoluciones) y ajuste masivo de precios con historial.
+- Cuentas por pagar (HU-25): lista con vencimientos, abonos con Transferencia, Efectivo o Cheque que quedan como egreso, y estado de cuenta del proveedor. Método "Cheque" inactivo para el POS (`database/migraciones/005_metodo_cheque.sql`).
+- Finanzas completo (HU-38b, HU-26, HU-27, HU-37): cuentas por cobrar con cobros que entran al corte de la caja, estado de cuenta del cliente, gastos operativos, dashboard de ingresos contra egresos y flujo de efectivo calculados del mes elegido. Las pantallas de dashboard y flujo ofrecen los meses recientes en lugar de octubre fijo.
+- Reportes (HU-28, HU-29): los 12 reportes con datos del servidor y el permiso de reportes, y el resumen del día de la pantalla de inicio, que solo muestra lo que el rol puede ver. Ya ninguna pantalla muestra "ruta que falta".
+- Administración completa (HU-34, HU-35, HU-41): roles nuevos y su matriz de permisos (sin necesitar `DELETE`), bitácora con filtros y textos legibles, terminales que han abierto caja y activación de métodos de pago.
+
 ## [1.0.1] - 2026-11-27
 
 Recupera el instalador del servidor de base de datos del PR #8, que se integró en `fix/4-venta-a-credito` después de que esa rama entró a `develop` y no llegó a la versión 1.0.0.

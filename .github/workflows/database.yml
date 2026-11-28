@@ -5,6 +5,7 @@ on:
     paths:
       - 'database/**'
       - 'deploy/**'
+      - 'middleware/app/crear_administrador.py'
       - '.github/workflows/database.yml'
   push:
     branches: [develop, main]
@@ -60,10 +61,45 @@ jobs:
           # schema.sql ya trae todo: cada migración debe reconocerse como aplicada.
           set -o pipefail
           bash database/instalar.sh --migraciones | tee migraciones.txt
-          if grep -q '^>>' migraciones.txt; then
+          if grep -q '^>> migraciones/' migraciones.txt; then
             echo "::error::Una migración no se reconoce como aplicada en una base nueva"
             exit 1
           fi
+
+      - name: Instalación de producción (sin datos de prueba)
+        env:
+          MYSQL_ARGS: -h 127.0.0.1 -P 3306 -u root -proot
+        run: |
+          mysql $MYSQL_ARGS -e "DROP DATABASE frutis"
+          bash database/instalar.sh
+          cuenta() { mysql $MYSQL_ARGS -N -B -e "SELECT COUNT(*) FROM frutis.$1"; }
+          echo "roles=$(cuenta roles) permisos=$(cuenta permisos) metodos=$(cuenta metodos_pago) usuarios=$(cuenta usuarios)"
+          test "$(cuenta roles)" = 4 && test "$(cuenta permisos)" = 16 && test "$(cuenta metodos_pago)" = 6
+          test "$(cuenta usuarios)" = 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: middleware/requirements.txt
+
+      - name: Primer Administrador con el comando del middleware
+        working-directory: middleware
+        env:
+          FRUTIS_DB_USER: root
+          FRUTIS_DB_PASSWORD: root
+          FRUTIS_JWT_SECRET: solo-para-la-ci-0123456789abcdefghij
+          FRUTIS_ADMIN_PASSWORD: Administrador2026!
+        run: |
+          pip install -r requirements.txt
+          python -m app.crear_administrador --usuario duena --nombre "Dueña de Frutis" --correo duena@frutis.test
+          rol=$(mysql -h 127.0.0.1 -u root -proot -N -B -e "SELECT r.nombre FROM frutis.usuarios u JOIN frutis.roles r USING(id_rol) WHERE u.usuario = 'duena'")
+          test "$rol" = Administrador
+          if python -m app.crear_administrador --usuario duena --nombre "Otra" --correo otra@frutis.test; then
+            echo "::error::Se pudo crear dos veces el mismo usuario"
+            exit 1
+          fi
+          echo "::notice title=Producción::Instalación sin datos de prueba con catálogos base y primer Administrador"
 
   rocky:
     name: Instalador en Rocky Linux 10

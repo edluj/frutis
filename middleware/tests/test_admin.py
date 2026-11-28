@@ -117,5 +117,73 @@ def test_editar_usuario_inexistente_404(cliente, admin):
 
 
 def test_roles_activos(cliente, admin, monkeypatch):
-    monkeypatch.setattr(repo, "listar_roles", lambda c: [{"id_rol": 1, "nombre": "Administrador"}])
-    assert cliente.get("/admin/roles", headers=admin).json() == [{"id_rol": 1, "nombre": "Administrador"}]
+    monkeypatch.setattr(repo, "listar_roles", lambda c: [{"id_rol": 1, "nombre": "Administrador", "usuarios": 1, "es_sistema": 1}])
+    assert cliente.get("/admin/roles", headers=admin).json() == [
+        {"id_rol": 1, "nombre": "Administrador", "usuarios": 1, "es_sistema": True}]
+
+
+# ---------------------------------------------------------------- roles, permisos, auditoría y métodos (HU-34, HU-35, HU-41)
+
+PERMISOS_CAJERO = {"permisos": [{"modulo": "pos", "puede_ver": True, "puede_crear": True},
+                                {"modulo": "inventario", "puede_ver": True}]}
+
+
+def test_guardar_permisos_pone_en_cero_los_modulos_que_no_vienen(cliente, admin, monkeypatch):
+    guardar = MagicMock()
+    monkeypatch.setattr(repo, "guardar_permiso", guardar)
+    assert cliente.put("/admin/roles/2/permisos", json=PERMISOS_CAJERO, headers=admin).status_code == 204
+    por_modulo = {c.args[2]["modulo"]: c.args[2] for c in guardar.call_args_list}
+    assert len(por_modulo) == 7
+    assert por_modulo["pos"]["puede_crear"] is True and por_modulo["finanzas"]["puede_ver"] is False
+    assert "Rol Cajero: pos VC, inventario V" in auditoria.registrar.call_args.args[3]
+
+
+def test_el_rol_administrador_no_se_edita(cliente, admin, monkeypatch):
+    guardar = MagicMock()
+    monkeypatch.setattr(repo, "guardar_permiso", guardar)
+    r = cliente.put("/admin/roles/1/permisos", json=PERMISOS_CAJERO, headers=admin)
+    assert r.status_code == 409 and r.json()["detail"] == "El rol Administrador no se edita."
+    guardar.assert_not_called()
+
+
+@pytest.mark.parametrize("cuerpo", [{"permisos": [{"modulo": "nomina", "puede_ver": True}]},
+                                    {"permisos": [{"modulo": "pos"}, {"modulo": "pos"}]}])
+def test_permisos_invalidos(cliente, admin, monkeypatch, cuerpo):
+    monkeypatch.setattr(repo, "guardar_permiso", MagicMock())
+    assert cliente.put("/admin/roles/2/permisos", json=cuerpo, headers=admin).status_code in (409, 422)
+
+
+def test_crear_rol_con_nombre_repetido(cliente, admin, monkeypatch):
+    monkeypatch.setattr(repo, "nombre_rol_en_uso", lambda c, n: n == "Cajero")
+    monkeypatch.setattr(repo, "insertar_rol", MagicMock(return_value=5))
+    assert cliente.post("/admin/roles", json={"nombre": "Cajero"}, headers=admin).json()["campo"] == "nombre"
+    r = cliente.post("/admin/roles", json={"nombre": "Supervisor"}, headers=admin)
+    assert r.status_code == 201 and r.json()["id_rol"] == 5
+
+
+METODOS = [{"id_metodo": 1, "nombre": "Efectivo", "clave_sat": "01", "es_efectivo": 1, "es_credito": 0, "activo": 1},
+           {"id_metodo": 5, "nombre": "Crédito", "clave_sat": "99", "es_efectivo": 0, "es_credito": 1, "activo": 1}]
+
+
+def test_el_efectivo_no_se_desactiva(cliente, admin, monkeypatch):
+    monkeypatch.setattr(repo, "metodos_pago", lambda c: METODOS)
+    activar = MagicMock()
+    monkeypatch.setattr(repo, "activar_metodo", activar)
+    assert cliente.put("/admin/metodos-pago/1", json={"activo": False}, headers=admin).status_code == 409
+    assert cliente.put("/admin/metodos-pago/5", json={"activo": False}, headers=admin).status_code == 204
+    activar.assert_called_once()
+    assert auditoria.registrar.call_args.args[2] == "metodo_desactivado"
+
+
+def test_auditoria_filtra_y_rechaza_texto_raro(cliente, admin, monkeypatch):
+    recibido = {}
+    monkeypatch.setattr(repo, "auditoria", lambda c, u, m, a, d, h: recibido.update(u=u, m=m, a=a) or [])
+    assert cliente.get("/admin/auditoria", params={"usuario": "compras1", "accion": "login_fallido"},
+                       headers=admin).status_code == 200
+    assert recibido == {"u": "compras1", "m": None, "a": "login_fallido"}
+    assert cliente.get("/admin/auditoria", params={"modulo": "pos' OR 1=1"}, headers=admin).status_code == 422
+
+
+def test_cajero_no_ve_la_auditoria_ni_los_metodos(cliente, admin, cabeceras):
+    for ruta in ("/admin/auditoria", "/admin/metodos-pago", "/admin/cajas", "/admin/roles/2/permisos"):
+        assert cliente.get(ruta, headers=cabeceras).status_code == 403

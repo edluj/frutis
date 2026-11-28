@@ -12,6 +12,7 @@ Scripts de MySQL 8.0 (8.0.16 o posterior, por los `CHECK` y `JSON_TABLE`). Histo
 | `procedures/sp_abrir_caja.sql` | Apertura de un turno: una caja abierta por terminal y por cajero (HU-15) |
 | `procedures/sp_cerrar_caja.sql` | Corte con arqueo; exige observaciones si hay diferencia (HU-09) |
 | `procedures/sp_registrar_devolucion.sql` | Devolución parcial o total: reingreso al lote o merma, y reembolso en efectivo, tarjeta, transferencia o abono a crédito (HU-30) |
+| `catalogos.sql` | Roles, matriz de permisos y métodos de pago; se carga en toda instalación (`INSERT IGNORE`) |
 | `seed.sql` | Datos de prueba para desarrollo; nunca datos reales |
 | `tests/test_cobro.sql` | 50 pruebas del esquema, `fn_importe_peso`, el cobro y la venta a crédito |
 | `tests/test_corte_devolucion.sql` | 48 pruebas de apertura, corte y devoluciones |
@@ -21,11 +22,13 @@ Scripts de MySQL 8.0 (8.0.16 o posterior, por los `CHECK` y `JSON_TABLE`). Histo
 ## Instalar
 
 ```bash
-MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh               # producción: sin datos
+MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh               # producción: catálogos, sin datos de prueba
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --con-datos   # desarrollo
 MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --con-pruebas # base desechable + pruebas
-MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --migraciones  # base existente: aplica las migraciones que falten
+MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh --migraciones  # base existente: catálogos y migraciones que falten
 ```
+
+Una base de producción no trae usuarios: el primer Administrador se crea con `cd middleware && .venv/bin/python -m app.crear_administrador --usuario <usuario> --nombre "<nombre>" --correo <correo>` (pide la contraseña sin mostrarla).
 
 En cada Pull Request que toca `database/`, GitHub Actions levanta MySQL 8.0 y corre `--con-pruebas` (`.github/workflows/database.yml`).
 
@@ -52,6 +55,7 @@ Los nombres van en minúsculas para que el esquema funcione igual en Windows y L
 - **Un ticket solo tiene una factura vigente.** Una factura cancelada libera el ticket para la factura sustituta.
 - **La bitácora `auditoria` es de solo lectura:** triggers rechazan `UPDATE` y `DELETE`.
 - **Los precios incluyen IVA.** El procedimiento desglosa el IVA según la tasa de cada producto (0 % o 16 %).
+- **Método de pago "Cheque"**, inactivo: solo sirve para pagar a proveedores y no aparece en la caja. Bases ya instaladas: `migraciones/005_metodo_cheque.sql`.
 - **Las mermas admiten el motivo "Plaga u hongo"** (`plaga`), que ofrece la pantalla. Bases ya instaladas: `migraciones/004_mermas_motivo_plaga.sql`.
 - **Proveedores y lotes guardan los datos de la pantalla** (`proveedores.direccion`, `lotes_compras.factura_proveedor`). Bases ya instaladas: `migraciones/003_compras_direccion_factura.sql`.
 - **Las devoluciones guardan su forma de reembolso** (`devoluciones.reembolso`). Solo las de efectivo se restan del corte. Bases ya instaladas: `migraciones/002_devoluciones_reembolso.sql` y después la función y los 3 procedimientos nuevos.

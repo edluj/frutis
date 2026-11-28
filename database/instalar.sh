@@ -2,11 +2,11 @@
 # Instala la base de datos de Frutis en orden.
 #
 # Uso:
-#   ./database/instalar.sh                  # esquema, función y procedimientos
+#   ./database/instalar.sh                  # esquema, rutinas y catálogos base (producción)
 #   ./database/instalar.sh --con-datos      # además carga seed.sql (solo desarrollo)
 #   ./database/instalar.sh --con-pruebas    # datos de prueba + pruebas (base desechable)
 #   ./database/instalar.sh --solo-rutinas   # actualiza funciones y procedimientos en una base existente
-#   ./database/instalar.sh --migraciones    # aplica en una base existente las migraciones que le falten
+#   ./database/instalar.sh --migraciones    # base existente: migraciones que falten y catálogos base
 #
 # Conexión: variables estándar del cliente mysql (~/.my.cnf) o MYSQL_ARGS, por ejemplo
 #   MYSQL_ARGS="-h 127.0.0.1 -u root -p" ./database/instalar.sh
@@ -25,6 +25,9 @@ rutinas() {
 # está aplicada; así se puede correr varias veces sin repetir un ALTER.
 migraciones() {
   local f consulta aplicada
+  # Primero los catálogos: una base de producción anterior a catalogos.sql no tenía roles ni
+  # métodos de pago, y la 005 tomaría el id del Efectivo si corriera antes.
+  run catalogos.sql
   for f in "$DIR"/migraciones/*.sql; do
     consulta=$(sed -n 's/^-- Aplicada si: //p' "$f")
     if [[ -z "$consulta" ]]; then
@@ -49,6 +52,7 @@ esac
 
 run schema.sql
 rutinas
+run catalogos.sql
 
 case "${1:-}" in
   --con-datos)   run seed.sql ;;
