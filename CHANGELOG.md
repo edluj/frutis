@@ -4,6 +4,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+## [1.1.0] - 2026-11-27
+
+Todas las pantallas conectadas con el middleware (Inventario, Compras, Finanzas, Administración y Reportes) y una instalación de producción que trae sus catálogos base y crea su primer Administrador.
+
 ### Corregido
 - Una instalación de producción quedaba sin roles, permisos ni métodos de pago (solo venían en `seed.sql`) y sin nadie que pudiera iniciar sesión. Ahora `database/catalogos.sql` se carga siempre (también con `--migraciones`, antes de las migraciones) y `python -m app.crear_administrador` crea el primer Administrador. La CI instala una base de producción y crea su Administrador.
 
